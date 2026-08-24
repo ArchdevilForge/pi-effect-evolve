@@ -424,7 +424,8 @@ export class SkillMemory {
     goal: TraceGoal,
     maxSizeKb = 15,
   ): { slug: string; title: string } | undefined {
-    if (goal.outcome === "failure" || goal.events.length < 1) return undefined;
+    if (goal.events.length < 1) return undefined;
+    if (goal.outcome === "failure") return undefined;
     const hasUnresolvedErrors = goal.events.some((e, idx) => {
       if (!e.isError) return false;
       return idx === goal.events.length - 1;
@@ -434,28 +435,46 @@ export class SkillMemory {
     let extractedCode = "";
     let toolCategory = "tool";
 
+    // 1. First priority: full code written or edited via write/write_to_file/edit/web_real
     for (let i = goal.events.length - 1; i >= 0; i--) {
       const ev = goal.events[i]!;
       if (ev.isError) continue;
 
+      if ((ev.tool === "write" || ev.tool === "write_to_file") && (typeof ev.input?.content === "string" || typeof ev.input?.CodeContent === "string")) {
+        const content = (ev.input.content ?? ev.input.CodeContent) as string;
+        if (content.length > 25) {
+          extractedCode = content;
+          toolCategory = "code";
+          break;
+        }
+      }
+      if ((ev.tool === "edit" || ev.tool === "replace_file_content") && (typeof ev.input?.replacement === "string" || typeof ev.input?.ReplacementContent === "string")) {
+        const content = (ev.input.replacement ?? ev.input.ReplacementContent) as string;
+        if (content.length > 25) {
+          extractedCode = content;
+          toolCategory = "edit";
+          break;
+        }
+      }
       if (ev.tool === "web_real" && typeof ev.input?.code === "string") {
         extractedCode = ev.input.code;
         toolCategory = "web-real";
         break;
       }
-      if (ev.tool === "bash" && typeof ev.input?.command === "string") {
-        const cmd = ev.input.command;
-        if (cmd.length > 25 && (cmd.includes("python") || cmd.includes("node") || cmd.includes("curl") || cmd.includes("jq") || cmd.includes("cat <<"))) {
-          extractedCode = cmd;
-          toolCategory = "bash";
-          break;
-        }
-      }
-      if (ev.tool === "write" && typeof ev.input?.content === "string") {
-        if (ev.input.content.length > 40) {
-          extractedCode = ev.input.content;
-          toolCategory = "code";
-          break;
+    }
+
+    // 2. Second priority: substantive bash commands with inline scripts
+    if (!extractedCode) {
+      for (let i = goal.events.length - 1; i >= 0; i--) {
+        const ev = goal.events[i]!;
+        if (ev.isError) continue;
+        if (ev.tool === "bash" && typeof ev.input?.command === "string") {
+          const cmd = ev.input.command;
+          if (cmd.length > 20 && !cmd.match(/^python3?\s+[\w./-]+\s*$/) && (cmd.includes("curl") || cmd.includes("jq") || cmd.includes("cat <<") || cmd.includes("import ") || cmd.includes("def "))) {
+            extractedCode = cmd;
+            toolCategory = "bash";
+            break;
+          }
         }
       }
     }

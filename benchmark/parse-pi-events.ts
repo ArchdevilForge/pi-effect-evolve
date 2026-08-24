@@ -46,7 +46,13 @@ export function parsePiJsonLines(jsonlOutput: string): ParsedPiRun {
             cacheReadTokens += Number(u.cacheReadTokens ?? u.cache_read_tokens ?? u.cacheRead ?? 0);
             cacheWriteTokens += Number(u.cacheWriteTokens ?? u.cache_write_tokens ?? u.cacheWrite ?? 0);
             totalTokens += Number(u.totalTokens ?? u.total_tokens ?? 0);
-            cost += Number(ev.cost ?? u.cost ?? 0);
+            const rawCost = ev.cost ?? u.cost ?? ev.message?.cost;
+            if (typeof rawCost === "number") {
+              if (Number.isFinite(rawCost)) cost += rawCost;
+            } else if (rawCost && typeof rawCost === "object") {
+              const total = Number(rawCost.total ?? 0);
+              if (Number.isFinite(total)) cost += total;
+            }
           }
 
           if (typeof ev.message?.content === "string") {

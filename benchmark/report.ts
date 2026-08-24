@@ -56,7 +56,7 @@ export function computePairedClusterBootstrapCI(
       const treatFamilyRuns = treatmentRuns.filter((r) => r.family === sampledFamily);
 
       for (const t of treatFamilyRuns) {
-        const matchedBase = baseFamilyRuns.find((b) => b.repeatIndex === t.repeatIndex && b.taskId === t.taskId) ?? baseFamilyRuns[0];
+        const matchedBase = baseFamilyRuns.find((b) => b.repeatIndex === t.repeatIndex && b.taskId === t.taskId);
         if (matchedBase) {
           sumBase += metricExtractor(matchedBase);
           sumTreat += metricExtractor(t);
@@ -260,7 +260,10 @@ export function printFormattedReportTable(summary: BenchmarkReportSummary): void
   }
 
   // Print Paired Cluster Bootstrap 95% Confidence Intervals
-  if (summary.bootstrapConfidenceIntervals && Object.keys(summary.bootstrapConfidenceIntervals).length > 0) {
+  const nFamilies = Number(summary.metadata?.families ?? 0);
+  if (nFamilies < 5) {
+    console.log(`\n📈 [Paired Cluster Bootstrap 95% Confidence Intervals: N/A (requires >=5 task families for valid cluster resampling, current: ${nFamilies})]`);
+  } else if (summary.bootstrapConfidenceIntervals && Object.keys(summary.bootstrapConfidenceIntervals).length > 0) {
     console.log("\n📈 [Paired Cluster Bootstrap 95% Confidence Intervals vs Bare Pi]");
     for (const [key, ci] of Object.entries(summary.bootstrapConfidenceIntervals)) {
       const groupName = key.replace(/_(cost|tool_calls)$/, "");

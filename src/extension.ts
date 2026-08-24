@@ -115,22 +115,12 @@ export default function (pi: ExtensionAPI) {
     pi.appendEntry(TRACE_KEY, { at: Date.now(), summary: trace.summary(3) });
   });
 
-  // --- 2. Turn Start / Input ---
-  pi.on("turn_start", async (_event, _ctx) => {
-    trace.startGoal(currentPromptText || "user-task");
-  });
-
-  pi.on("turn_end", async (_event, _ctx) => {
-    const goal = trace.activeGoal();
-    if (goal) {
-      const hasErrors = goal.events.some((e) => e.isError);
-      trace.endGoal(hasErrors ? "partial" : "success");
-    }
-  });
-
-  // --- 3. Zero-Touch Auto-Recall & Prompt Injection (before_agent_start) ---
+  // --- 2. Zero-Touch Auto-Recall & Prompt Injection (before_agent_start) ---
   pi.on("before_agent_start", async (event, ctx) => {
     currentPromptText = event.prompt;
+    // Start exactly one goal for the entire user task
+    trace.startGoal(event.prompt || "user-task");
+
     const mem = getMemory(ctx.cwd);
 
     // Intent-matched search for relevant skills
@@ -167,15 +157,20 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  // --- 4. Zero-Touch Autonomous Crystallization, Feedback & Auto-Healing (agent_end) ---
+  // --- 3. Zero-Touch Autonomous Crystallization, Feedback & Auto-Healing (agent_end) ---
   pi.on("agent_end", async (_event, ctx) => {
     const mem = getMemory(ctx.cwd);
     const goal = trace.activeGoal();
     const mode = evolveMode();
 
-    if (!goal) return;
+    if (!goal) {
+      appendAudit(ctx.cwd, { event: "crystallize_skip", reason: "no_active_goal" });
+      return;
+    }
 
     const hasErrors = goal.events.some((e) => e.isError);
+    // End the goal on overall agent completion
+    trace.endGoal(hasErrors ? "partial" : "success");
 
     // A. Implicit Quality Feedback
     if (currentActiveSkills.length > 0) {
@@ -191,6 +186,12 @@ export default function (pi: ExtensionAPI) {
 
     // B. Autonomous Background Crystallization (in auto mode)
     if (mode === "auto" && !hasErrors && currentActiveSkills.length === 0) {
+      appendAudit(ctx.cwd, {
+        event: "crystallize_candidate",
+        goalEvents: goal.events.length,
+        toolNames: goal.events.map((e) => e.tool),
+      });
+
       const crystallized = mem.autoCrystallizeGoal(goal, skillMaxKb());
       if (crystallized) {
         appendAudit(ctx.cwd, {
@@ -199,6 +200,12 @@ export default function (pi: ExtensionAPI) {
           title: crystallized.title,
         });
         pi.appendEntry("evolve-auto", { slug: crystallized.slug, at: Date.now() });
+      } else {
+        appendAudit(ctx.cwd, {
+          event: "crystallize_skip",
+          reason: goal.events.length === 0 ? "no_events" : "no_extractable_code_or_size",
+          goalEvents: goal.events.length,
+        });
       }
     }
 

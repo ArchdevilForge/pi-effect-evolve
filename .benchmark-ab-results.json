@@ -3,7 +3,7 @@
   "model": "muse-spark-1.2-contributor",
   "thinking": "high",
   "report": {
-    "timestamp": "2026-08-24T07:29:42.063Z",
+    "timestamp": "2026-08-24T07:41:34.946Z",
     "model": "muse-spark-1.2-contributor",
     "thinkingLevel": "high",
     "totalRuns": 4,
@@ -13,14 +13,14 @@
         "runs": 1,
         "passCount": 1,
         "passRate": 100,
-        "medianCost": null,
-        "meanCost": null,
-        "medianInputTokens": 3567,
-        "medianOutputTokens": 837,
-        "medianToolCalls": 4,
+        "medianCost": 0,
+        "meanCost": 0,
+        "medianInputTokens": 4025,
+        "medianOutputTokens": 952,
+        "medianToolCalls": 5,
         "meanToolErrors": 0,
-        "medianWallTimeMs": 13709.385042000002,
-        "toolCallsReductionVsBarePct": 20,
+        "medianWallTimeMs": 18245.29309,
+        "toolCallsReductionVsBarePct": 16.666666666666664,
         "passRateDeltaVsBarePct": 0
       },
       "A_bare": {
@@ -28,27 +28,27 @@
         "runs": 1,
         "passCount": 1,
         "passRate": 100,
-        "medianCost": null,
-        "meanCost": null,
-        "medianInputTokens": 3258,
-        "medianOutputTokens": 800,
-        "medianToolCalls": 5,
-        "meanToolErrors": 0,
-        "medianWallTimeMs": 16874.551120000004
+        "medianCost": 0,
+        "meanCost": 0,
+        "medianInputTokens": 3116,
+        "medianOutputTokens": 876,
+        "medianToolCalls": 6,
+        "meanToolErrors": 1,
+        "medianWallTimeMs": 11911.399724999996
       },
       "D_learned": {
         "group": "D_learned",
         "runs": 1,
         "passCount": 1,
         "passRate": 100,
-        "medianCost": null,
-        "meanCost": null,
-        "medianInputTokens": 4327,
-        "medianOutputTokens": 1112,
-        "medianToolCalls": 6,
+        "medianCost": 0,
+        "meanCost": 0,
+        "medianInputTokens": 3911,
+        "medianOutputTokens": 795,
+        "medianToolCalls": 3,
         "meanToolErrors": 0,
-        "medianWallTimeMs": 14448.104685999999,
-        "toolCallsReductionVsBarePct": -20,
+        "medianWallTimeMs": 8240.323183,
+        "toolCallsReductionVsBarePct": 50,
         "passRateDeltaVsBarePct": 0
       },
       "C_warm": {
@@ -56,14 +56,14 @@
         "runs": 1,
         "passCount": 1,
         "passRate": 100,
-        "medianCost": null,
-        "meanCost": null,
-        "medianInputTokens": 4176,
-        "medianOutputTokens": 789,
-        "medianToolCalls": 5,
+        "medianCost": 0,
+        "meanCost": 0,
+        "medianInputTokens": 3393,
+        "medianOutputTokens": 886,
+        "medianToolCalls": 4,
         "meanToolErrors": 0,
-        "medianWallTimeMs": 11922.453781000004,
-        "toolCallsReductionVsBarePct": 0,
+        "medianWallTimeMs": 8759.293998000001,
+        "toolCallsReductionVsBarePct": 33.33333333333333,
         "passRateDeltaVsBarePct": 0
       }
     },
@@ -71,11 +71,11 @@
       "trainTotal": 1,
       "trainPassCount": 1,
       "trainPassRatePct": 100,
-      "crystallizeCount": 0,
-      "crystallizeRatePct": 0,
-      "heldoutRecallCount": 0,
-      "heldoutRecallRatePct": 0,
-      "medianTrainCost": null
+      "crystallizeCount": 1,
+      "crystallizeRatePct": 100,
+      "heldoutRecallCount": 1,
+      "heldoutRecallRatePct": 100,
+      "medianTrainCost": 0
     },
     "bootstrapConfidenceIntervals": {
       "B_empty_cost": {
@@ -86,9 +86,9 @@
       },
       "B_empty_tool_calls": {
         "metric": "Tool Calls Delta %",
-        "low95": -20,
-        "median": -20,
-        "high95": -20
+        "low95": -16.666666666666664,
+        "median": -16.666666666666664,
+        "high95": -16.666666666666664
       },
       "D_learned_cost": {
         "metric": "Cost Delta %",
@@ -98,9 +98,9 @@
       },
       "D_learned_tool_calls": {
         "metric": "Tool Calls Delta %",
-        "low95": 20,
-        "median": 20,
-        "high95": 20
+        "low95": -50,
+        "median": -50,
+        "high95": -50
       },
       "C_warm_cost": {
         "metric": "Cost Delta %",
@@ -110,9 +110,9 @@
       },
       "C_warm_tool_calls": {
         "metric": "Tool Calls Delta %",
-        "low95": 0,
-        "median": 0,
-        "high95": 0
+        "low95": -33.33333333333333,
+        "median": -33.33333333333333,
+        "high95": -33.33333333333333
       }
     },
     "metadata": {
@@ -129,17 +129,17 @@
       "repeatIndex": 0,
       "passed": true,
       "verifierOutput": "VERIFIER_PASS",
-      "wallTimeMs": 13709.385042000002,
-      "turns": 5,
-      "toolCalls": 4,
+      "wallTimeMs": 18245.29309,
+      "turns": 6,
+      "toolCalls": 5,
       "toolErrors": 0,
       "usage": {
-        "inputTokens": 3567,
-        "outputTokens": 837,
-        "cacheReadTokens": 11637,
+        "inputTokens": 4025,
+        "outputTokens": 952,
+        "cacheReadTokens": 15206,
         "cacheWriteTokens": 0,
-        "totalTokens": 16041,
-        "cost": null
+        "totalTokens": 20183,
+        "cost": 0
       },
       "recalledSkills": [],
       "crystallizedSkills": [],
@@ -152,17 +152,17 @@
       "repeatIndex": 0,
       "passed": true,
       "verifierOutput": "VERIFIER_PASS",
-      "wallTimeMs": 16874.551120000004,
-      "turns": 6,
-      "toolCalls": 5,
-      "toolErrors": 0,
+      "wallTimeMs": 11911.399724999996,
+      "turns": 7,
+      "toolCalls": 6,
+      "toolErrors": 1,
       "usage": {
-        "inputTokens": 3258,
-        "outputTokens": 800,
-        "cacheReadTokens": 11942,
+        "inputTokens": 3116,
+        "outputTokens": 876,
+        "cacheReadTokens": 13975,
         "cacheWriteTokens": 0,
-        "totalTokens": 16000,
-        "cost": null
+        "totalTokens": 17967,
+        "cost": 0
       },
       "recalledSkills": [],
       "crystallizedSkills": [],
@@ -175,27 +175,29 @@
       "repeatIndex": 0,
       "passed": true,
       "verifierOutput": "VERIFIER_PASS",
-      "wallTimeMs": 14448.104685999999,
-      "turns": 7,
-      "toolCalls": 6,
+      "wallTimeMs": 8240.323183,
+      "turns": 3,
+      "toolCalls": 3,
       "toolErrors": 0,
       "usage": {
-        "inputTokens": 4327,
-        "outputTokens": 1112,
-        "cacheReadTokens": 18711,
+        "inputTokens": 3911,
+        "outputTokens": 795,
+        "cacheReadTokens": 6035,
         "cacheWriteTokens": 0,
-        "totalTokens": 24150,
-        "cost": null
+        "totalTokens": 10741,
+        "cost": 0
       },
-      "recalledSkills": [],
+      "recalledSkills": [
+        "auto-read-input_nested-json"
+      ],
       "crystallizedSkills": [],
       "exitCode": 0,
       "trainPassed": true,
-      "trainCost": null,
-      "trainInputTokens": 3665,
-      "trainCrystallizedCount": 0,
-      "trainWallTimeMs": 14201.058138999999,
-      "heldoutRecalledLearnedSkill": false
+      "trainCost": 0,
+      "trainInputTokens": 4137,
+      "trainCrystallizedCount": 1,
+      "trainWallTimeMs": 10815.402148000001,
+      "heldoutRecalledLearnedSkill": true
     },
     {
       "taskId": "json-extract-heldout-a",
@@ -204,17 +206,17 @@
       "repeatIndex": 0,
       "passed": true,
       "verifierOutput": "VERIFIER_PASS",
-      "wallTimeMs": 11922.453781000004,
+      "wallTimeMs": 8759.293998000001,
       "turns": 4,
-      "toolCalls": 5,
+      "toolCalls": 4,
       "toolErrors": 0,
       "usage": {
-        "inputTokens": 4176,
-        "outputTokens": 789,
-        "cacheReadTokens": 9412,
+        "inputTokens": 3393,
+        "outputTokens": 886,
+        "cacheReadTokens": 9924,
         "cacheWriteTokens": 0,
-        "totalTokens": 14377,
-        "cost": null
+        "totalTokens": 14203,
+        "cost": 0
       },
       "recalledSkills": [
         "gold-json-flatten"

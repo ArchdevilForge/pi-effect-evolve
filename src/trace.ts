@@ -25,6 +25,7 @@ export class TraceStore {
       startTs: Date.now(),
     });
     this.activeGoalId = goalId;
+    this.lastEventId = undefined;
     // evict oldest goals beyond limit
     if (this.goals.size > MAX_GOALS) {
       const oldest = this.goals.keys().next().value;
