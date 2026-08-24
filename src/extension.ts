@@ -71,9 +71,9 @@ function appendAudit(cwd: string, entry: Record<string, unknown>) {
 
 // --- web_real impl: try agent-browser-cli, fallback ---
 function execAgentBrowser(code: string, _url?: string): string {
-  // GA's TMWebdriver bridge: agent-browser --execute
+  const extra = (process.env.AGENT_BROWSER_ARGS ?? "").split(" ").filter(Boolean);
   try {
-    const out = NodeChild.execFileSync("agent-browser", ["--execute", code], { encoding: "utf8", timeout: 15000 });
+    const out = NodeChild.execFileSync("agent-browser", [...extra, "--execute", code], { encoding: "utf8", timeout: 15000 });
     return out;
   } catch (e: any) {
     throw new GateError(e?.message ?? String(e));
