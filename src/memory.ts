@@ -469,8 +469,6 @@ export class SkillMemory {
     }
 
     const slug = `auto-${baseSlug}`;
-    if (this.hasSkill(slug)) return undefined;
-
     const title = `Auto-Learned: ${goal.description.slice(0, 40)}`;
     const tags = Array.from(new Set([toolCategory, "auto-crystallized", ...goal.events.map((e) => e.tool)]));
 
@@ -480,15 +478,26 @@ export class SkillMemory {
       const skillMd = `---\nname: ${slug}\ntitle: ${title}\ntags: [${tags.join(", ")}]\n---\n\n# ${title}\n\nAuto-crystallized from successful goal: \`${goal.description}\`\n\n\`\`\`python\n${extractedCode}\n\`\`\`\n`;
       NodeFs.writeFileSync(NodePath.join(dir, "SKILL.md"), skillMd, "utf8");
       NodeFs.writeFileSync(NodePath.join(dir, "script.py"), extractedCode, "utf8");
+
+      let prevMeta: Record<string, unknown> = {};
+      try {
+        prevMeta = JSON.parse(NodeFs.readFileSync(NodePath.join(dir, "meta.json"), "utf8"));
+      } catch {}
+
+      const version = typeof prevMeta.version === "number" ? prevMeta.version + 1 : 1;
+
       NodeFs.writeFileSync(
         NodePath.join(dir, "meta.json"),
         JSON.stringify(
           {
+            ...prevMeta,
             slug,
             title,
             tags,
+            version,
             autoLearned: true,
-            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            createdAt: prevMeta.createdAt ?? new Date().toISOString(),
             goalId: goal.goalId,
           },
           null,
@@ -501,7 +510,7 @@ export class SkillMemory {
         slug,
         title,
         tags,
-        createdAt: new Date().toISOString(),
+        createdAt: typeof prevMeta.createdAt === "string" ? prevMeta.createdAt : new Date().toISOString(),
         sizeBytes: byteSize,
       });
 
