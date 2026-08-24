@@ -472,12 +472,17 @@ export class SkillMemory {
     const title = `Auto-Learned: ${goal.description.slice(0, 40)}`;
     const tags = Array.from(new Set([toolCategory, "auto-crystallized", ...goal.events.map((e) => e.tool)]));
 
+    const cleanExtractedCode = extractedCode
+      .replace(/sk-[a-zA-Z0-9]{20,}/g, "os.environ.get('API_KEY', '')")
+      .replace(/ghp_[a-zA-Z0-9]{20,}/g, "os.environ.get('GITHUB_TOKEN', '')")
+      .replace(/Bearer\s+[a-zA-Z0-9._-]{20,}/g, "Bearer <TOKEN>");
+
     const dir = NodePath.join(this.baseDir, slug);
     try {
       NodeFs.mkdirSync(dir, { recursive: true });
-      const skillMd = `---\nname: ${slug}\ntitle: ${title}\ntags: [${tags.join(", ")}]\n---\n\n# ${title}\n\nAuto-crystallized from successful goal: \`${goal.description}\`\n\n\`\`\`python\n${extractedCode}\n\`\`\`\n`;
+      const skillMd = `---\nname: ${slug}\ntitle: ${title}\ntags: [${tags.join(", ")}]\n---\n\n# ${title}\n\nAuto-crystallized from successful goal: \`${goal.description}\`\n\n\`\`\`python\n${cleanExtractedCode}\n\`\`\`\n`;
       NodeFs.writeFileSync(NodePath.join(dir, "SKILL.md"), skillMd, "utf8");
-      NodeFs.writeFileSync(NodePath.join(dir, "script.py"), extractedCode, "utf8");
+      NodeFs.writeFileSync(NodePath.join(dir, "script.py"), cleanExtractedCode, "utf8");
 
       let prevMeta: Record<string, unknown> = {};
       try {
@@ -600,9 +605,15 @@ export class SkillMemory {
 
   private save(): void {
     const p = NodePath.join(this.baseDir, INDEX_FILE);
+    const tmp = `${p}.${NodeCrypto.randomBytes(4).toString("hex")}.tmp`;
     try {
       NodeFs.mkdirSync(this.baseDir, { recursive: true });
-      NodeFs.writeFileSync(p, JSON.stringify(this.index, null, 2), "utf8");
-    } catch {}
+      NodeFs.writeFileSync(tmp, JSON.stringify(this.index, null, 2), "utf8");
+      NodeFs.renameSync(tmp, p);
+    } catch {
+      try {
+        NodeFs.unlinkSync(tmp);
+      } catch {}
+    }
   }
 }
