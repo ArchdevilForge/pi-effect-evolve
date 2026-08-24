@@ -1,0 +1,34 @@
+{
+  "zone": "Alpha",
+  "clusters": [
+    {
+      "clusterId": "C1",
+      "devices": [
+        {
+          "deviceId": "D-10",
+          "model": "TX90",
+          "status": "online",
+          "network": {
+            "ipAddress": "192.168.1.10"
+          }
+        },
+        {
+          "deviceId": "D-11",
+          "model": "TX90",
+          "status": "offline",
+          "network": {
+            "ipAddress": "192.168.1.11"
+          }
+        },
+        {
+          "deviceId": "D-12",
+          "model": "TX95",
+          "status": "online",
+          "network": {
+            "ipAddress": "192.168.1.12"
+          }
+        }
+      ]
+    }
+  ]
+}

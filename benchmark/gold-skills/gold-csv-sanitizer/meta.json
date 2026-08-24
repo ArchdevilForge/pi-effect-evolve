@@ -1,0 +1,13 @@
+{
+  "slug": "gold-csv-sanitizer",
+  "title": "RFC 4180 CSV Normalizer & Delimiter Sanitizer",
+  "tags": [
+    "csv",
+    "cleanup",
+    "delimiter",
+    "quotes",
+    "sanitizer"
+  ],
+  "version": 1,
+  "verified": true
+}

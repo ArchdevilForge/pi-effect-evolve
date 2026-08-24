@@ -1,0 +1,74 @@
+[
+  {
+    "id": "json-extract-train",
+    "family": "json-extract",
+    "type": "train",
+    "prompt": "Read input_nested.json and extract all active user IDs, usernames, and their primary email into flat_users.json as a clean list of objects",
+    "fixtureDir": "benchmark/fixtures/json_extract_train",
+    "verifierScript": "benchmark/verifiers/verify_json_extract.py",
+    "goldSkillSlug": "gold-json-flatten"
+  },
+  {
+    "id": "json-extract-heldout-a",
+    "family": "json-extract",
+    "type": "held_out_a",
+    "prompt": "Parse sensor_hierarchy.json and extract all devices with status 'online' into flat_devices.json with deviceId, model, and ipAddress",
+    "fixtureDir": "benchmark/fixtures/json_extract_heldout_a",
+    "verifierScript": "benchmark/verifiers/verify_json_extract_b.py",
+    "goldSkillSlug": "gold-json-flatten"
+  },
+  {
+    "id": "csv-cleanup-train",
+    "family": "csv-cleanup",
+    "type": "train",
+    "prompt": "Clean up raw_messy.csv (which has mixed delimiters, unescaped quotes, and blank lines) and output clean standard RFC-4180 clean.csv",
+    "fixtureDir": "benchmark/fixtures/csv_cleanup_train",
+    "verifierScript": "benchmark/verifiers/verify_csv_cleanup.py",
+    "goldSkillSlug": "gold-csv-sanitizer"
+  },
+  {
+    "id": "csv-cleanup-heldout-a",
+    "family": "csv-cleanup",
+    "type": "held_out_a",
+    "prompt": "Fix corrupted_transactions.csv by standardizing separators to comma, trimming whitespace, and saving to valid_transactions.csv",
+    "fixtureDir": "benchmark/fixtures/csv_cleanup_heldout_a",
+    "verifierScript": "benchmark/verifiers/verify_csv_cleanup_b.py",
+    "goldSkillSlug": "gold-csv-sanitizer"
+  },
+  {
+    "id": "test-repair-train",
+    "family": "test-repair",
+    "type": "train",
+    "prompt": "Run the failing unit test test_calculator.py, fix the bug in calculator.py so that python3 -m unittest test_calculator.py passes with 0 failures",
+    "fixtureDir": "benchmark/fixtures/test_repair_train",
+    "verifierScript": "benchmark/verifiers/verify_test_repair.py",
+    "goldSkillSlug": "gold-unittest-debugger"
+  },
+  {
+    "id": "test-repair-heldout-a",
+    "family": "test-repair",
+    "type": "held_out_a",
+    "prompt": "Fix the sorting algorithm bug in data_sorter.py so that all test assertions in test_sorter.py pass cleanly",
+    "fixtureDir": "benchmark/fixtures/test_repair_heldout_a",
+    "verifierScript": "benchmark/verifiers/verify_test_repair_b.py",
+    "goldSkillSlug": "gold-unittest-debugger"
+  },
+  {
+    "id": "log-diagnosis-train",
+    "family": "log-diagnosis",
+    "type": "train",
+    "prompt": "Analyze server.log, identify all unique exception types and their occurrence counts, and save the summary to error_summary.json",
+    "fixtureDir": "benchmark/fixtures/log_diagnosis_train",
+    "verifierScript": "benchmark/verifiers/verify_log_diagnosis.py",
+    "goldSkillSlug": "gold-log-parser"
+  },
+  {
+    "id": "log-diagnosis-heldout-a",
+    "family": "log-diagnosis",
+    "type": "held_out_a",
+    "prompt": "Scan application_trace.log, extract the root cause stack trace for the FATAL crash and write { 'error': ..., 'line': ..., 'file': ... } to fatal_cause.json",
+    "fixtureDir": "benchmark/fixtures/log_diagnosis_heldout_a",
+    "verifierScript": "benchmark/verifiers/verify_log_diagnosis_b.py",
+    "goldSkillSlug": "gold-log-parser"
+  }
+]

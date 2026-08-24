@@ -1,0 +1,14 @@
+{
+  "slug": "gold-unittest-debugger",
+  "title": "Python Unit Test Fixer & Verification Runner",
+  "tags": [
+    "unittest",
+    "test",
+    "repair",
+    "debug",
+    "calculator",
+    "sort"
+  ],
+  "version": 1,
+  "verified": true
+}

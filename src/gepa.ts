@@ -90,9 +90,17 @@ export function mutate(
 
 import * as ChildProcess from "node:child_process";
 
-/** Verify that the candidate script compiles cleanly */
+/**
+ * Verify that the candidate script compiles cleanly (fail-closed).
+ * NOTE: This is a syntax/AST verification gate, NOT behavioral verification.
+ */
 export function verifyCodeSyntax(code: string): { valid: boolean; error?: string } {
-  if (code.includes("import ") || code.includes("def ") || code.includes("print(")) {
+  if (!code || code.trim().length === 0) {
+    return { valid: false, error: "Empty code candidate" };
+  }
+
+  // 1. Python candidate
+  if (code.includes("import ") || code.includes("def ") || code.includes("print(") || code.includes("class ") || code.includes("with ")) {
     try {
       const res = ChildProcess.spawnSync("python3", ["-c", "import ast, sys; ast.parse(sys.stdin.read())"], {
         input: code,
@@ -100,15 +108,16 @@ export function verifyCodeSyntax(code: string): { valid: boolean; error?: string
         timeout: 2000,
       });
       if (res.status !== 0) {
-        return { valid: false, error: res.stderr || "Python syntax error" };
+        return { valid: false, error: res.stderr?.trim() || "Python AST compilation failed" };
       }
       return { valid: true };
-    } catch {
-      return { valid: true };
+    } catch (err) {
+      return { valid: false, error: `Python verification subprocess failed: ${String(err)}` };
     }
   }
 
-  if (code.includes("const ") || code.includes("function ") || code.includes("require(")) {
+  // 2. Node.js / JavaScript candidate
+  if (code.includes("const ") || code.includes("let ") || code.includes("function ") || code.includes("require(")) {
     try {
       const res = ChildProcess.spawnSync("node", ["--input-type=module", "--check"], {
         input: code,
@@ -116,15 +125,33 @@ export function verifyCodeSyntax(code: string): { valid: boolean; error?: string
         timeout: 2000,
       });
       if (res.status !== 0) {
-        return { valid: false, error: res.stderr || "Node syntax error" };
+        return { valid: false, error: res.stderr?.trim() || "Node.js syntax check failed" };
       }
       return { valid: true };
-    } catch {
-      return { valid: true };
+    } catch (err) {
+      return { valid: false, error: `Node verification subprocess failed: ${String(err)}` };
     }
   }
 
-  return { valid: true };
+  // 3. Shell / Bash command
+  if (code.startsWith("curl ") || code.startsWith("git ") || code.startsWith("jq ") || code.includes(" | ")) {
+    try {
+      const res = ChildProcess.spawnSync("bash", ["-n"], {
+        input: code,
+        encoding: "utf8",
+        timeout: 2000,
+      });
+      if (res.status !== 0) {
+        return { valid: false, error: res.stderr?.trim() || "Bash syntax check failed" };
+      }
+      return { valid: true };
+    } catch (err) {
+      return { valid: false, error: `Bash verification failed: ${String(err)}` };
+    }
+  }
+
+  // Unrecognized language: fail-closed
+  return { valid: false, error: "Unrecognized or unsupported script syntax" };
 }
 
 /** Evaluate variants against basic gates and real syntax verification */

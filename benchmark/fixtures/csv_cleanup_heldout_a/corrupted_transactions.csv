@@ -1,0 +1,5 @@
+tx_id	user	status
+TX1001	alice	completed
+TX1002	bob	pending
+
+TX1003	charlie	completed

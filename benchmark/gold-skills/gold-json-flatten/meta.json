@@ -1,0 +1,13 @@
+{
+  "slug": "gold-json-flatten",
+  "title": "Nested JSON Hierarchy Extractor",
+  "tags": [
+    "json",
+    "nested",
+    "extract",
+    "flatten",
+    "hierarchy"
+  ],
+  "version": 1,
+  "verified": true
+}

@@ -1,0 +1,43 @@
+{
+  "version": "2.0",
+  "data": {
+    "organization": "Acme Corp",
+    "departments": [
+      {
+        "name": "Engineering",
+        "members": [
+          {
+            "id": 101,
+            "username": "alice",
+            "active": true,
+            "contact": {
+              "email": "alice@acme.com",
+              "phone": "123"
+            }
+          },
+          {
+            "id": 102,
+            "username": "bob",
+            "active": false,
+            "contact": {
+              "email": "bob@acme.com"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Research",
+        "members": [
+          {
+            "id": 103,
+            "username": "charlie",
+            "active": true,
+            "contact": {
+              "email": "charlie@acme.com"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

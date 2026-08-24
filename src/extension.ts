@@ -34,12 +34,12 @@ function allowNetwork(): boolean {
   return env("PI_EFFECT_ALLOW_NETWORK", "1") === "1";
 }
 function requireConfirm(): boolean {
-  return env("PI_EFFECT_REQUIRE_CONFIRM", "0") === "1";
+  return env("PI_EFFECT_REQUIRE_CONFIRM", "1") === "1";
 }
 function evolveMode(): "auto" | "conservative" | "gepa" {
-  const m = env("PI_EFFECT_EVOLVE_MODE", "auto");
-  if (m === "conservative" || m === "gepa") return m;
-  return "auto";
+  const m = env("PI_EFFECT_EVOLVE_MODE", "conservative");
+  if (m === "auto" || m === "gepa") return m;
+  return "conservative";
 }
 function skillMaxKb(): number {
   return Number(env("PI_EFFECT_SKILL_MAX_KB", "15") ?? 15);

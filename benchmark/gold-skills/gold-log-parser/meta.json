@@ -1,0 +1,14 @@
+{
+  "slug": "gold-log-parser",
+  "title": "Regex Exception Log Aggregator & Traceback Extractor",
+  "tags": [
+    "log",
+    "diagnosis",
+    "traceback",
+    "exception",
+    "regex",
+    "summary"
+  ],
+  "version": 1,
+  "verified": true
+}
