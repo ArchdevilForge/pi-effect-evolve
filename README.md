@@ -79,7 +79,7 @@ cp .env.example .env
 | Tool | Purpose | Mode |
 |---|---|---|
 | `evolve_trace` | Inspect structured goal traces & error taxonomy | Read-only |
-| `evolve_search` | Query indexed skills with quality score | Read-only |
+| `evolve_get` | Load a matched skill by exact slug | Read-only |
 | `evolve_crystallize` | Manually write/override a skill recipe | Manual / Override |
 | `evolve_feedback` | Manually report success/failure score | Manual / Override |
 | `evolve_gepa` | Manually run offline diagnosis and mutation | Manual / Review |
@@ -99,6 +99,9 @@ npm run deep-benchmark
 
 # Run 5,000-skill synthetic microbenchmark & concurrency stress test
 npm run extreme-benchmark
+
+# Measure extension, recipe, and deferred-tool schema tax
+npm run benchmark:schema-tax
 ```
 
 ---

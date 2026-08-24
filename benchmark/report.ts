@@ -178,11 +178,21 @@ export function generateBenchmarkReport(
     ).length;
     const trainCosts = withTrain.map((r) => r.trainCost ?? 0);
     const medTrainCost = median(trainCosts);
-
-    const baseMedCost = base?.medianCost ?? 0;
-    const dMedCost = groupStats["D_learned"]?.medianCost ?? 0;
-    const savingsPerRun = baseMedCost - dMedCost;
-    const breakEvenReuses = savingsPerRun > 0 && medTrainCost > 0 ? medTrainCost / savingsPerRun : undefined;
+    const medTrainTotalTokens = median(withTrain.map((r) => r.trainTotalTokens ?? r.trainInputTokens ?? 0));
+    const medTrainToolCalls = median(withTrain.map((r) => r.trainToolCalls ?? 0));
+    const medTrainWallTimeMs = median(withTrain.map((r) => r.trainWallTimeMs ?? 0));
+    const reusableRuns = withTrain.filter((r) => (r.trainCrystallizedCount ?? 0) > 0);
+    const heldoutSavings = reusableRuns.flatMap((r) => {
+      const bare = bareRuns.find((b) => b.taskId === r.taskId && b.repeatIndex === r.repeatIndex);
+      return bare ? [bare.usage.totalTokens - r.usage.totalTokens] : [];
+    });
+    const medianHeldoutSavingsTokens = median(heldoutSavings);
+    const heldoutSavingsPct = base?.medianTotalTokens && base.medianTotalTokens > 0
+      ? (medianHeldoutSavingsTokens / base.medianTotalTokens) * 100
+      : 0;
+    const breakEvenReuseCount = medianHeldoutSavingsTokens > 0 && medTrainTotalTokens > 0
+      ? Math.ceil(medTrainTotalTokens / medianHeldoutSavingsTokens)
+      : undefined;
 
     learningCoverage = {
       trainTotal: withTrain.length,
@@ -195,7 +205,12 @@ export function generateBenchmarkReport(
       usefulRecallCount,
       usefulRecallRatePct: withTrain.length > 0 ? (usefulRecallCount / withTrain.length) * 100 : 0,
       medianTrainCost: medTrainCost,
-      breakEvenReuses,
+      medianTrainTotalTokens: medTrainTotalTokens,
+      medianTrainToolCalls: medTrainToolCalls,
+      medianTrainWallTimeMs: medTrainWallTimeMs,
+      medianHeldoutSavingsTokens,
+      heldoutSavingsPct,
+      breakEvenReuseCount: breakEvenReuseCount ?? null,
     };
   }
 
@@ -353,6 +368,11 @@ export function printFormattedReportTable(summary: BenchmarkReportSummary): void
     console.log(`   • Step 2 Skill Crystallized:   ${cov.crystallizeRatePct.toFixed(1)}% (${cov.crystallizeCount}/${cov.trainTotal})`);
     console.log(`   • Step 3 Held-out Recalled:    ${cov.heldoutRecallRatePct.toFixed(1)}% (${cov.heldoutRecallCount}/${cov.trainTotal})`);
     console.log(`   • Step 4 Useful Recall (Pass): ${cov.usefulRecallRatePct.toFixed(1)}% (${cov.usefulRecallCount}/${cov.trainTotal})`);
+    console.log(`   • Train Total Tokens (median): ${Math.round(cov.medianTrainTotalTokens).toLocaleString()}`);
+    console.log(`   • Train Tool Calls (median):   ${cov.medianTrainToolCalls.toFixed(1)}`);
+    console.log(`   • Train Wall Time (median):    ${(cov.medianTrainWallTimeMs / 1000).toFixed(1)}s`);
+    console.log(`   • Held-out Token Savings:      ${Math.round(cov.medianHeldoutSavingsTokens).toLocaleString()} (${cov.heldoutSavingsPct.toFixed(1)}%)`);
+    console.log(`   • Break-even Reuse Count:      ${cov.breakEvenReuseCount ?? "n/a"}`);
   }
 
   // Print Bootstrap 95% Confidence Intervals

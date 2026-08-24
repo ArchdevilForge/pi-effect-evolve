@@ -308,7 +308,7 @@ export async function main(): Promise<void> {
 
       for (let r = 0; r < repeats; r++) {
         let learnedMemoryDir: string | undefined = undefined;
-        let trainMeta: { passed: boolean; cost: number; inputTokens: number; crystallizedCount: number; wallTimeMs: number; learnedSlugs: string[] } | undefined = undefined;
+        let trainMeta: { passed: boolean; cost: number; inputTokens: number; totalTokens: number; toolCalls: number; crystallizedCount: number; wallTimeMs: number; learnedSlugs: string[] } | undefined = undefined;
 
         // --- Step 1: Group D Train Stage (if trainTask exists) ---
         if (trainTask) {
@@ -324,6 +324,8 @@ export async function main(): Promise<void> {
             passed: trainRes.passed,
             cost: trainRes.usage.cost,
             inputTokens: trainRes.usage.inputTokens,
+            totalTokens: trainRes.usage.totalTokens,
+            toolCalls: trainRes.toolCalls,
             crystallizedCount: trainRes.crystallizedSkills.length,
             wallTimeMs: trainRes.wallTimeMs,
             learnedSlugs: trainRes.crystallizedSkills,
@@ -350,6 +352,8 @@ export async function main(): Promise<void> {
             res.trainPassed = trainMeta.passed;
             res.trainCost = trainMeta.cost;
             res.trainInputTokens = trainMeta.inputTokens;
+            res.trainTotalTokens = trainMeta.totalTokens;
+            res.trainToolCalls = trainMeta.toolCalls;
             res.trainCrystallizedCount = trainMeta.crystallizedCount;
             res.trainWallTimeMs = trainMeta.wallTimeMs;
             res.heldoutRecalledLearnedSkill = res.recalledSkills.some((s) => trainMeta?.learnedSlugs.includes(s));

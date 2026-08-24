@@ -42,6 +42,8 @@ export interface AgentRunResult {
   trainPassed?: boolean | undefined;
   trainCost?: number | undefined;
   trainInputTokens?: number | undefined;
+  trainTotalTokens?: number | undefined;
+  trainToolCalls?: number | undefined;
   trainCrystallizedCount?: number | undefined;
   trainWallTimeMs?: number | undefined;
   heldoutRecalledLearnedSkill?: boolean | undefined;
@@ -79,7 +81,12 @@ export interface LearningCoverageReport {
   usefulRecallCount: number;
   usefulRecallRatePct: number;
   medianTrainCost: number;
-  breakEvenReuses?: number | undefined;
+  medianTrainTotalTokens: number;
+  medianTrainToolCalls: number;
+  medianTrainWallTimeMs: number;
+  medianHeldoutSavingsTokens: number;
+  heldoutSavingsPct: number;
+  breakEvenReuseCount: number | null;
 }
 
 export interface FamilyBreakdownRow {

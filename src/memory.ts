@@ -5,7 +5,7 @@
 import * as NodeFs from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeCrypto from "node:crypto";
-import type { SkillIndex, SkillIndexEntry, TraceGoal } from "./types.js";
+import type { SkillIndex, SkillIndexEntry, TraceGoal, SkillType } from "./types.js";
 
 const INDEX_FILE = ".index.json";
 const DEPRECATE_DAYS = 60;
@@ -14,6 +14,7 @@ const ARCHIVE_DAYS = 90;
 export interface RetrievedSkill extends SkillIndexEntry {
   code?: string | undefined;
   skillMd?: string | undefined;
+  meta?: Record<string, unknown> | undefined;
 }
 
 export interface TokenGroup {
@@ -227,6 +228,7 @@ export class SkillMemory {
       const existing = this.index.entries.findIndex((e) => e.slug === entry.slug);
       const full: SkillIndexEntry = {
         ...entry,
+        type: entry.type ?? "code",
         lastUsed: entry.createdAt,
         useCount: 0,
         successCount: 0,
@@ -366,8 +368,34 @@ export class SkillMemory {
         ...r.entry,
         code: content?.code,
         skillMd: content?.skillMd,
+        meta: content?.meta,
       };
     });
+  }
+
+  /** Compact prompt payload; full content remains available through evolve_get(slug). */
+  compactContext(skill: RetrievedSkill, maxChars = 600): string {
+    const metaType = skill.meta?.type;
+    const type: SkillType = skill.type ?? (metaType === "procedure" ? "procedure" : "code");
+    const metaRecipe = typeof skill.meta?.recipe === "string" ? skill.meta.recipe : "";
+    const metaSteps = Array.isArray(skill.meta?.steps)
+      ? skill.meta.steps.filter((step): step is string => typeof step === "string").join("\n")
+      : "";
+    const markdownRecipe = (skill.skillMd ?? "")
+      .replace(/^---[\s\S]*?---\s*/m, "")
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/Source trace:[\s\S]*$/i, "")
+      .trim();
+    const recipe = (metaRecipe || metaSteps || markdownRecipe || `Reuse the verified ${skill.title} workflow.`)
+      .slice(0, maxChars);
+    const keyCode = type === "code" && skill.code ? skill.code.trim().slice(0, 420) : "";
+
+    return [
+      `### Skill: ${skill.slug} (${skill.title}) [type: ${type}]`,
+      `Recipe:\n${recipe}`,
+      keyCode ? `Key code fragment (adapt, do not assume complete):\n\`\`\`\n${keyCode}${skill.code && skill.code.length > 420 ? "\n..." : ""}\n\`\`\`` : "",
+      type === "code" ? `Full implementation: use evolve_get with slug "${skill.slug}" only if needed.` : "",
+    ].filter(Boolean).join("\n");
   }
 
   /** Get all active (non-deprecated) skills */
@@ -393,10 +421,19 @@ export class SkillMemory {
   ): { skillMd: string; code: string; meta: Record<string, unknown> } | undefined {
     const dir = NodePath.join(this.baseDir, slug);
     try {
+      const skillMd = NodeFs.readFileSync(NodePath.join(dir, "SKILL.md"), "utf8");
+      let code = "";
+      let meta: Record<string, unknown> = {};
+      try {
+        code = NodeFs.readFileSync(NodePath.join(dir, "script.py"), "utf8");
+      } catch {}
+      try {
+        meta = JSON.parse(NodeFs.readFileSync(NodePath.join(dir, "meta.json"), "utf8"));
+      } catch {}
       return {
-        skillMd: NodeFs.readFileSync(NodePath.join(dir, "SKILL.md"), "utf8"),
-        code: NodeFs.readFileSync(NodePath.join(dir, "script.py"), "utf8"),
-        meta: JSON.parse(NodeFs.readFileSync(NodePath.join(dir, "meta.json"), "utf8")),
+        skillMd,
+        code,
+        meta,
       };
     } catch {
       return undefined;
@@ -423,65 +460,64 @@ export class SkillMemory {
   autoCrystallizeGoal(
     goal: TraceGoal,
     maxSizeKb = 15,
-  ): { slug: string; title: string } | undefined {
+  ): { slug: string; title: string; type: SkillType } | undefined {
     if (goal.events.length < 1) return undefined;
     if (goal.outcome === "failure") return undefined;
-    const hasUnresolvedErrors = goal.events.some((e, idx) => {
-      if (!e.isError) return false;
-      return idx === goal.events.length - 1;
-    });
-    if (hasUnresolvedErrors) return undefined;
+    if (goal.events.at(-1)?.isError) return undefined;
 
+    const procedure = this.buildProcedure(goal);
     let extractedCode = "";
     let toolCategory = "tool";
 
-    // 1. First priority: full code written or edited via write/write_to_file/edit/web_real
-    for (let i = goal.events.length - 1; i >= 0; i--) {
-      const ev = goal.events[i]!;
-      if (ev.isError) continue;
-
-      if ((ev.tool === "write" || ev.tool === "write_to_file") && (typeof ev.input?.content === "string" || typeof ev.input?.CodeContent === "string")) {
-        const content = (ev.input.content ?? ev.input.CodeContent) as string;
-        if (content.length > 25) {
-          extractedCode = content;
-          toolCategory = "code";
-          break;
-        }
-      }
-      if ((ev.tool === "edit" || ev.tool === "replace_file_content") && (typeof ev.input?.replacement === "string" || typeof ev.input?.ReplacementContent === "string")) {
-        const content = (ev.input.replacement ?? ev.input.ReplacementContent) as string;
-        if (content.length > 25) {
-          extractedCode = content;
-          toolCategory = "edit";
-          break;
-        }
-      }
-      if (ev.tool === "web_real" && typeof ev.input?.code === "string") {
-        extractedCode = ev.input.code;
-        toolCategory = "web-real";
-        break;
-      }
-    }
-
-    // 2. Second priority: substantive bash commands with inline scripts
-    if (!extractedCode) {
+    if (!procedure) {
+      // 1. First priority: full code written or edited via write/write_to_file/edit/web_real
       for (let i = goal.events.length - 1; i >= 0; i--) {
         const ev = goal.events[i]!;
         if (ev.isError) continue;
-        if (ev.tool === "bash" && typeof ev.input?.command === "string") {
-          const cmd = ev.input.command;
-          if (cmd.length > 20 && !cmd.match(/^python3?\s+[\w./-]+\s*$/) && (cmd.includes("curl") || cmd.includes("jq") || cmd.includes("cat <<") || cmd.includes("import ") || cmd.includes("def "))) {
-            extractedCode = cmd;
-            toolCategory = "bash";
+
+        if ((ev.tool === "write" || ev.tool === "write_to_file") && (typeof ev.input?.content === "string" || typeof ev.input?.CodeContent === "string")) {
+          const content = (ev.input.content ?? ev.input.CodeContent) as string;
+          if (content.length > 25) {
+            extractedCode = content;
+            toolCategory = "code";
             break;
+          }
+        }
+        if ((ev.tool === "edit" || ev.tool === "replace_file_content") && (typeof ev.input?.replacement === "string" || typeof ev.input?.ReplacementContent === "string")) {
+          const content = (ev.input.replacement ?? ev.input.ReplacementContent) as string;
+          if (content.length > 25) {
+            extractedCode = content;
+            toolCategory = "edit";
+            break;
+          }
+        }
+        if (ev.tool === "web_real" && typeof ev.input?.code === "string") {
+          extractedCode = ev.input.code;
+          toolCategory = "web-real";
+          break;
+        }
+      }
+
+      // 2. Second priority: substantive bash commands with inline scripts
+      if (!extractedCode) {
+        for (let i = goal.events.length - 1; i >= 0; i--) {
+          const ev = goal.events[i]!;
+          if (ev.isError) continue;
+          if (ev.tool === "bash" && typeof ev.input?.command === "string") {
+            const cmd = ev.input.command;
+            if (cmd.length > 20 && !cmd.match(/^python3?\s+[\w./-]+\s*$/) && (cmd.includes("curl") || cmd.includes("jq") || cmd.includes("cat <<") || cmd.includes("import ") || cmd.includes("def "))) {
+              extractedCode = cmd;
+              toolCategory = "bash";
+              break;
+            }
           }
         }
       }
     }
 
-    if (!extractedCode || extractedCode.length < 15) return undefined;
+    if (!procedure && (!extractedCode || extractedCode.length < 15)) return undefined;
 
-    const byteSize = Buffer.byteLength(extractedCode, "utf8");
+    const byteSize = Buffer.byteLength(procedure ?? extractedCode, "utf8");
     if (byteSize > maxSizeKb * 1024) return undefined;
 
     const cleanDesc = goal.description
@@ -496,12 +532,13 @@ export class SkillMemory {
       .join("-");
 
     if (!baseSlug || baseSlug.length < 3) {
-      baseSlug = `${toolCategory}-${NodeCrypto.randomBytes(3).toString("hex")}`;
+      baseSlug = `${procedure ? "procedure" : toolCategory}-${NodeCrypto.randomBytes(3).toString("hex")}`;
     }
 
     const slug = `auto-${baseSlug}`;
     const title = `Auto-Learned: ${goal.description.slice(0, 40)}`;
-    const tags = Array.from(new Set([toolCategory, "auto-crystallized", ...goal.events.map((e) => e.tool)]));
+    const type: SkillType = procedure ? "procedure" : "code";
+    const tags = Array.from(new Set([type, toolCategory, "auto-crystallized", ...goal.events.map((e) => e.tool)]));
 
     const cleanExtractedCode = extractedCode
       .replace(/sk-[a-zA-Z0-9]{20,}/g, "os.environ.get('API_KEY', '')")
@@ -511,9 +548,15 @@ export class SkillMemory {
     const dir = NodePath.join(this.baseDir, slug);
     try {
       NodeFs.mkdirSync(dir, { recursive: true });
-      const skillMd = `---\nname: ${slug}\ntitle: ${title}\ntags: [${tags.join(", ")}]\n---\n\n# ${title}\n\nAuto-crystallized from successful goal: \`${goal.description}\`\n\n\`\`\`python\n${cleanExtractedCode}\n\`\`\`\n`;
+      const skillMd = procedure
+        ? `---\nname: ${slug}\ntitle: ${title}\ntype: procedure\ntags: [${tags.join(", ")}]\n---\n\n# ${title}\n\n## Recipe\n${procedure}\n`
+        : `---\nname: ${slug}\ntitle: ${title}\ntype: code\ntags: [${tags.join(", ")}]\n---\n\n# ${title}\n\nAuto-crystallized from successful goal: \`${goal.description}\`\n\n\`\`\`python\n${cleanExtractedCode}\n\`\`\`\n`;
       NodeFs.writeFileSync(NodePath.join(dir, "SKILL.md"), skillMd, "utf8");
-      NodeFs.writeFileSync(NodePath.join(dir, "script.py"), cleanExtractedCode, "utf8");
+      if (procedure) {
+        try { NodeFs.unlinkSync(NodePath.join(dir, "script.py")); } catch {}
+      } else {
+        NodeFs.writeFileSync(NodePath.join(dir, "script.py"), cleanExtractedCode, "utf8");
+      }
 
       let prevMeta: Record<string, unknown> = {};
       try {
@@ -530,6 +573,9 @@ export class SkillMemory {
             slug,
             title,
             tags,
+            type,
+            recipe: procedure ?? `Reuse the verified ${toolCategory} logic for: ${goal.description}`,
+            steps: procedure ? procedure.split("\n") : undefined,
             version,
             autoLearned: true,
             updatedAt: new Date().toISOString(),
@@ -545,15 +591,39 @@ export class SkillMemory {
       this.register({
         slug,
         title,
+        type,
         tags,
         createdAt: typeof prevMeta.createdAt === "string" ? prevMeta.createdAt : new Date().toISOString(),
         sizeBytes: byteSize,
       });
 
-      return { slug, title };
+      return { slug, title, type };
     } catch {
       return undefined;
     }
+  }
+
+  private buildProcedure(goal: TraceGoal): string | undefined {
+    const eventText = goal.events.map((event) => `${event.tool} ${JSON.stringify(event.input ?? {})} ${event.output}`).join("\n");
+    const hasTestSignal = /pytest|unittest|test[_ -]|assert|failing test/i.test(eventText);
+    const hasChangeSignal = goal.events.some((event) =>
+      /^(edit|replace_file_content|write|write_to_file|apply_patch)$/i.test(event.tool) ||
+      /apply_patch|sed\s+-i|perl\s+-i|cat\s+>|patched|fixed/i.test(eventText),
+    );
+    if (!hasTestSignal || !hasChangeSignal) return undefined;
+
+    const testCommand = goal.events.find((event) =>
+      typeof event.input?.command === "string" && /pytest|unittest|test/i.test(event.input.command),
+    )?.input.command as string | undefined;
+    const firstStep = testCommand
+      ? `1. Run the targeted test: \`${testCommand.replace(/`/g, "'").slice(0, 180)}\`.`
+      : "1. Run the targeted test or verifier to reproduce the failure.";
+    return [
+      firstStep,
+      "2. Inspect the first failing assertion or traceback and locate the implementation site.",
+      "3. Apply the smallest patch to the implementation; keep the test as the contract.",
+      "4. Rerun the targeted test, then run the relevant regression checks.",
+    ].join("\n");
   }
 
   /** Prune: deprecate stale skills, archive old deprecated ones */

@@ -83,6 +83,30 @@ describe("SkillMemory (Phase 1+3)", () => {
     assert.match(saved!.code, /followers/);
   });
 
+  it("crystallizes a resolved test repair as a procedure without script.py", () => {
+    const goal: TraceGoal = {
+      goalId: "repair-g1",
+      description: "run failing unit test and fix calculator bug",
+      startTs: Date.now() - 5000,
+      outcome: "partial",
+      events: [
+        { id: "e1", goalId: "repair-g1", tool: "bash", input: { command: "python3 -m unittest test_calculator.py" }, output: "FAIL: AssertionError", isError: true, durationMs: 100, ts: Date.now() - 3000 },
+        { id: "e2", goalId: "repair-g1", tool: "edit", input: { path: "calculator.py", replacement: "return a + b" }, output: "edited", isError: false, durationMs: 100, ts: Date.now() - 2000 },
+        { id: "e3", goalId: "repair-g1", tool: "bash", input: { command: "python3 -m unittest test_calculator.py" }, output: "OK", isError: false, durationMs: 100, ts: Date.now() - 1000 },
+      ],
+    };
+
+    const res = mem.autoCrystallizeGoal(goal);
+    assert.ok(res);
+    assert.equal(res!.type, "procedure");
+    const saved = mem.readSkill(res!.slug);
+    assert.ok(saved);
+    assert.equal(saved!.code, "");
+    assert.equal(saved!.meta.type, "procedure");
+    assert.match(saved!.skillMd, /Run the targeted test/);
+    assert.equal(mem.active().find((entry) => entry.slug === res!.slug)?.type, "procedure");
+  });
+
   it("records usage and tracks success rate", () => {
     mem.register({ slug: "test-skill", title: "Test", tags: [], createdAt: new Date().toISOString(), sizeBytes: 100 });
     mem.recordUsage("test-skill", true);

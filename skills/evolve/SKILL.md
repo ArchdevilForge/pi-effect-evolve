@@ -24,7 +24,7 @@ description: Zero-touch autonomous memory & self-evolution for pi — absorbing 
 
 | Tool | Purpose |
 |---|---|
-| `evolve_search` | Manually search indexed skills with quality score |
+| `evolve_get` | Load a matched skill by exact slug |
 | `evolve_trace` | Inspect structured causal goal traces & errors |
 | `evolve_crystallize` | Explicitly write/override a skill recipe |
 | `evolve_feedback` | Manually report success/failure score |

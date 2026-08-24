@@ -21,6 +21,18 @@ import { SkillMemory } from "./memory.js";
 import { gepaPipeline, queueForReview, autoHealFailure } from "./gepa.js";
 import { AgentBrowser, AgentBrowserLive, browserExecute, browserExecuteWithRetry } from "./layers.js";
 
+const DEFERRED_TOOLS = [
+  "web_real",
+  "web_scan_real",
+  "evolve_trace",
+  "evolve_crystallize",
+  "evolve_get",
+  "evolve_feedback",
+  "evolve_gepa",
+] as const;
+type DeferredTool = typeof DEFERRED_TOOLS[number];
+type SchemaTaxMode = "production" | "inactive" | "recipe" | "always" | "deferred";
+
 // --- env (de-sens, allowlist) ---
 function env(name: string, fallback?: string): string | undefined {
   const v = process.env[name];
@@ -43,6 +55,12 @@ function evolveMode(): "auto" | "conservative" | "gepa" {
 }
 function skillMaxKb(): number {
   return Number(env("PI_EFFECT_SKILL_MAX_KB", "15") ?? 15);
+}
+function schemaTaxMode(): SchemaTaxMode {
+  const mode = env("PI_EFFECT_SCHEMA_TAX_MODE", "production");
+  return mode === "inactive" || mode === "recipe" || mode === "always" || mode === "deferred"
+    ? mode
+    : "production";
 }
 function auditLogPath(cwd: string): string {
   return NodePath.resolve(cwd, env("PI_EFFECT_AUDIT_LOG", ".pi/evolve-audit.jsonl") ?? ".pi/evolve-audit.jsonl");
@@ -69,6 +87,32 @@ function appendAudit(cwd: string, entry: Record<string, unknown>) {
     NodeFs.mkdirSync(NodePath.dirname(p), { recursive: true });
     NodeFs.appendFileSync(p, line + "\n", "utf8");
   } catch {}
+}
+
+function setDeferredTools(pi: ExtensionAPI, names: string[]): void {
+  const active = pi.getActiveTools().filter((name) => !DEFERRED_TOOLS.includes(name as DeferredTool));
+  pi.setActiveTools([...new Set([...active, ...names])]);
+}
+
+function promptNeedsWeb(prompt: string): boolean {
+  return /web|browser|https?:\/\/|\burl\b|\bdom\b|网页|浏览器|网站/i.test(prompt);
+}
+
+function promptNeedsDiagnostics(prompt: string): boolean {
+  return /evolve|trace|gepa|crystall|feedback|memory|skill|记忆|技能|轨迹|沉淀/i.test(prompt);
+}
+
+function toolsForPrompt(prompt: string, matches: ReturnType<SkillMemory["searchByPrompt"]>): string[] {
+  const mode = schemaTaxMode();
+  if (mode === "inactive" || mode === "recipe") return [];
+  if (mode === "always") return [...DEFERRED_TOOLS];
+
+  const names: string[] = [];
+  const expandable = matches.some((match) => (match.type ?? (match.meta?.type === "procedure" ? "procedure" : "code")) === "code");
+  if (expandable) names.push("evolve_get");
+  if (promptNeedsWeb(prompt)) names.push("web_real", "web_scan_real");
+  if (promptNeedsDiagnostics(prompt)) names.push("evolve_trace", "evolve_crystallize", "evolve_feedback", "evolve_gepa");
+  return names;
 }
 
 export default function (pi: ExtensionAPI) {
@@ -122,9 +166,11 @@ export default function (pi: ExtensionAPI) {
     trace.startGoal(event.prompt || "user-task");
 
     const mem = getMemory(ctx.cwd);
+    const taxMode = schemaTaxMode();
 
     // Intent-matched search for relevant skills
-    const matches = mem.searchByPrompt(event.prompt, 2);
+    const matches = taxMode === "inactive" ? [] : mem.searchByPrompt(event.prompt, 2);
+    setDeferredTools(pi, toolsForPrompt(event.prompt, matches));
     currentActiveSkills = matches.map((m) => m.slug);
 
     let injection = "";
@@ -136,20 +182,10 @@ export default function (pi: ExtensionAPI) {
       });
 
       const skillBlocks = matches
-        .map(
-          (m) =>
-            `### Skill: ${m.slug} (${m.title}) [Tags: ${m.tags.join(", ")}]\n${
-              m.code ? "```python\n" + m.code + "\n```" : m.skillMd ?? ""
-            }`,
-        )
+        .map((m) => mem.compactContext(m))
         .join("\n\n");
 
-      injection = `[Autonomous Memory: Loaded ${matches.length} matching crystallized skill(s)]\n${skillBlocks}\nGuidance: Prioritize reusing and adapting the verified logic above to solve the user's request.`;
-    } else {
-      // Fallback: general summary
-      const summary = mem.contextSummary();
-      const traceSummary = trace.summary(2);
-      injection = [summary, traceSummary].filter(Boolean).join("\n\n");
+      injection = `[Autonomous Memory: Loaded ${matches.length} matching crystallized recipe(s)]\n${skillBlocks}\nGuidance: Start with the compact recipe above. Use evolve_get only when the recipe is insufficient.`;
     }
 
     if (injection) {
@@ -185,7 +221,7 @@ export default function (pi: ExtensionAPI) {
     }
 
     // B. Autonomous Background Crystallization (in auto mode)
-    if (mode === "auto" && !hasErrors && currentActiveSkills.length === 0) {
+    if (mode === "auto" && goal.events.at(-1)?.isError !== true && currentActiveSkills.length === 0) {
       appendAudit(ctx.cwd, {
         event: "crystallize_candidate",
         goalEvents: goal.events.length,
@@ -231,6 +267,7 @@ export default function (pi: ExtensionAPI) {
 
   // --- 5. Session Lifecycle ---
   pi.on("session_start", async (_e, ctx) => {
+    setDeferredTools(pi, []);
     trace.restore(ctx.cwd);
     const mem = getMemory(ctx.cwd);
     const { deprecated, archived } = mem.prune();
@@ -396,24 +433,22 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "evolve_search",
-    label: "Evolve Search",
-    description: "Search crystallized skills by keyword.",
+    name: "evolve_get",
+    label: "Evolve Get",
+    description: "Load the full crystallized skill for a known slug.",
     parameters: Type.Object({
-      query: Type.String({ description: "search query" }),
-      limit: Type.Optional(Type.Number({ description: "max results" })),
+      slug: Type.String({ description: "exact crystallized skill slug" }),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const mem = getMemory(ctx.cwd);
-      const results = mem.search(params.query, params.limit ?? 5);
-      if (results.length === 0) {
-        return { content: [{ type: "text", text: `No skills found for "${params.query}"` }], details: { results: [] } };
+      const content = mem.readSkill(params.slug);
+      if (!content) {
+        return { content: [{ type: "text", text: `No skill found for "${params.slug}"` }], details: { slug: params.slug }, isError: true };
       }
-      const text = results.map((r) => {
-        const rate = r.useCount > 0 ? Math.round((r.successCount / r.useCount) * 100) : -1;
-        return `- ${r.slug}: ${r.title} [${r.tags.join(",")}] used=${r.useCount}${rate >= 0 ? " ok=" + rate + "%" : ""}`;
-      }).join("\n");
-      return { content: [{ type: "text", text }], details: { results } };
+      return {
+        content: [{ type: "text", text: `${content.skillMd}${content.code ? `\n\nImplementation:\n\`\`\`python\n${content.code}\n\`\`\`` : ""}` }],
+        details: { slug: params.slug, type: content.meta.type ?? "code" },
+      };
     },
   });
 

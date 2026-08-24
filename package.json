@@ -36,6 +36,7 @@
     "extreme-benchmark": "npm run build && node --test dist/test/extreme_benchmark.test.js",
     "benchmark:smoke": "npm run build && node dist/benchmark/runner.js --smoke",
     "benchmark:ab": "npm run build && node dist/benchmark/runner.js --mode=ab",
+    "benchmark:schema-tax": "npm run build && node dist/benchmark/schema-tax.js",
     "benchmark:verify-gold": "npm run build && node dist/benchmark/verify-gold.js",
     "prepare": "npm run build"
   },

@@ -44,9 +44,12 @@ export interface TraceGoal {
 }
 
 // --- Phase 1+3: skill index ---
+export type SkillType = "code" | "procedure";
+
 export interface SkillIndexEntry {
   slug: string;
   title: string;
+  type?: SkillType | undefined;
   tags: string[];
   createdAt: string;
   lastUsed: string;
