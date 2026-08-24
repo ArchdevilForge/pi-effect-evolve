@@ -27,11 +27,11 @@ function env(name: string, fallback?: string): string | undefined {
   return v === undefined || v === "" ? fallback : v;
 }
 function allowHosts(): string[] {
-  const raw = env("PI_EFFECT_ALLOW_HOSTS", "") ?? "";
+  const raw = env("PI_EFFECT_ALLOW_HOSTS", "*") ?? "*";
   return raw.split(",").map((s) => s.trim()).filter(Boolean);
 }
 function allowNetwork(): boolean {
-  return env("PI_EFFECT_ALLOW_NETWORK", "0") === "1";
+  return env("PI_EFFECT_ALLOW_NETWORK", "1") === "1";
 }
 function requireConfirm(): boolean {
   return env("PI_EFFECT_REQUIRE_CONFIRM", "1") !== "0";
@@ -47,7 +47,7 @@ function auditLogPath(cwd: string): string {
 }
 function isHostAllowed(url: string): boolean {
   const hosts = allowHosts();
-  if (hosts.length === 0) return false;
+  if (hosts.length === 0 || hosts.includes("*")) return true;
   try {
     const h = new URL(url).host;
     return hosts.some((pat) => {

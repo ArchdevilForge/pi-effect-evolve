@@ -55,8 +55,8 @@ cp .env.example .env
 
 | Variable | Default | Description |
 |---|---|---|
-| `PI_EFFECT_ALLOW_HOSTS` | `""` | Comma-separated domain allowlist (e.g. `example.com,*.api.io`) |
-| `PI_EFFECT_ALLOW_NETWORK` | `0` | Set `1` to enable networked tools (`web_real`, `web_scan_real`) |
+| `PI_EFFECT_ALLOW_HOSTS` | `*` | Comma-separated domain allowlist (`*` = allow all) |
+| `PI_EFFECT_ALLOW_NETWORK` | `1` | Network switch: `1` = enabled (default), `0` = disabled |
 | `PI_EFFECT_REQUIRE_CONFIRM` | `1` | Human confirmation prompt before saving crystallized skills |
 | `PI_EFFECT_EVOLVE_MODE` | `conservative` | Evolution mode: `conservative` \| `auto` \| `gepa` |
 | `PI_EFFECT_SKILL_MAX_KB` | `15` | Max allowable size in KB per crystallized skill |
