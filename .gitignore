@@ -13,3 +13,7 @@ auth.json
 mykey.py
 sessions/
 *.db
+.pi/
+skills/evolve/.index.json
+skills/evolve/.archive/
+skills/evolve/_gepa_queue/

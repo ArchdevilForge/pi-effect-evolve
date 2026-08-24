@@ -6,6 +6,16 @@
 
 This package keeps the **first-principles kernel** and gates the grey area.
 
+## Architecture (v2)
+
+```
+Phase 1  Write-Manage-Read closed loop for crystallized skills
+Phase 2  Structured trace (goal-aware, causal, error-categorized)
+Phase 3  Adaptive forgetting (deprecate + archive stale skills)
+Phase 4  GEPA-lite pipeline (diagnose → mutate → evaluate → select)
+Phase 5  Effect layers (DI, retry, abort-aware, testable)
+```
+
 ## Why not just use GA/Hermes
 
 * you love `pi`'s `TS extension + session tree + 30+ providers` and want **one harness**
@@ -18,6 +28,7 @@ This package keeps the **first-principles kernel** and gates the grey area.
 2. **Conservative crystallize** — `PI_EFFECT_EVOLVE_MODE=conservative` (default): only `code_run/bash` success + **human `ctx.ui.confirm`** → write to `skills/evolve/`. `auto` / `gepa` are opt-in.
 3. **Hermes-lite gates** — skill `≤15KB`, `pytest -q` must pass if `tests/` exists, no mid-conversation file churn, audit `JSONL` per write.
 4. **Effect-managed IO** — `Effect` owns `retry/scope/typed errors`; pi events stay abort-aware (`ctx.signal`).
+5. **Memory W-M-R** — skills are indexed, searchable, quality-tracked, and auto-pruned.
 
 ## Install
 
@@ -35,14 +46,17 @@ cp .env.example .env
 # fill PI_EFFECT_ALLOW_HOSTS=example.com PI_EFFECT_ALLOW_NETWORK=1
 ```
 
-## Tools added
+## Tools
 
-| Tool | Grey gate |
-|---|---|
-| `web_real` | `allowlist` + `ALLOW_NETWORK` |
-| `web_scan_real` | same |
-| `evolve_crystallize` | `REQUIRE_CONFIRM` + skill size gate |
-| `evolve_trace` | read-only trace capture for GEPA input |
+| Tool | Grey gate | Phase |
+|---|---|---|
+| `web_real` | `allowlist` + `ALLOW_NETWORK` | 5 (Effect DI + retry) |
+| `web_scan_real` | same | 5 |
+| `evolve_crystallize` | `REQUIRE_CONFIRM` + skill size gate | 1+2 (indexed + trace) |
+| `evolve_trace` | read-only | 2 (structured trace) |
+| `evolve_search` | read-only | 1 (skill retrieval) |
+| `evolve_feedback` | none | 1+3 (quality signal) |
+| `evolve_gepa` | `EVOLVE_MODE=auto/gepa` | 4 (GEPA pipeline) |
 
 Skills auto-injected:
 * `skills/evolve/SKILL.md` — when to crystallize vs mutate
@@ -54,11 +68,22 @@ Pi prompt:
 ```
 use web_real to observe https://example.com and extract the signing chain, then crystallize
 ```
-Pi will: `web_real` (gated) → `bash` PoC → `evolve_crystallize` (asks `Allow Crystallize?`) → writes `skills/evolve/example-sign/SKILL.md` → `pi.appendEntry` audit.
+Pi will: `web_real` (gated) → `bash` PoC → `evolve_crystallize` (asks `Allow Crystallize?`) → writes `skills/evolve/example-sign/` → updates `.index.json` → `pi.appendEntry` audit.
 
-Evolve towards GEPA later:
+Search existing skills:
+```
+evolve_search --query "sign"
+```
+
+Record feedback:
+```
+evolve_feedback --slug example-sign --success true
+```
+
+Run GEPA evolution (opt-in):
 ```
 set PI_EFFECT_EVOLVE_MODE=gepa && pi
+evolve_gepa --autoApply true
 ```
 
 ## De-sens & Open-source
@@ -71,8 +96,20 @@ set PI_EFFECT_EVOLVE_MODE=gepa && pi
 ## Effect stack
 
 * `effect 3.22.1` + `@effect/platform-node` — `Effect.gen`/`Layer`/`Schedule`/`Scope` for all IO
+* Phase 5: `AgentBrowser` service with Layer DI, retry policies, testable mock
 * `typebox` schemas for tool params (same as pi core)
 * peer on `pi` `0.84.2`
+
+## Module structure
+
+```
+src/types.ts      shared types (errors, trace, index, GEPA)
+src/trace.ts      structured trace store (Phase 2)
+src/memory.ts     skill index + retrieval + forgetting (Phase 1+3)
+src/gepa.ts       GEPA-lite pipeline (Phase 4)
+src/layers.ts     Effect layers + services (Phase 5)
+src/extension.ts  main entry — wires everything together
+```
 
 ## Grey-area notice
 
