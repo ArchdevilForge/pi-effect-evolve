@@ -228,7 +228,7 @@ export function printFormattedReportTable(summary: BenchmarkReportSummary): void
                   name === "D_learned" ? "D: Evolve Learned" : name;
 
     const passStr = `${st.passRate.toFixed(1)}% (${st.passCount}/${st.runs})`;
-    const costStr = `$${st.medianCost.toFixed(4)}`;
+    const costStr = Number.isFinite(st.medianCost) && st.medianCost > 0 ? `$${st.medianCost.toFixed(4)}` : "$0.0000";
     const inTokStr = `${Math.round(st.medianInputTokens).toLocaleString()}`;
     const toolsStr = `${st.medianToolCalls.toFixed(1)}`;
     const errStr = `${st.meanToolErrors.toFixed(1)}`;
