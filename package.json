@@ -32,6 +32,7 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test dist/test/*.test.js",
     "benchmark": "npm run build && node --test dist/test/benchmark.test.js",
+    "deep-benchmark": "npm run build && node --test dist/test/deep_benchmark.test.js",
     "prepare": "npm run build"
   },
   "dependencies": {

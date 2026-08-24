@@ -163,9 +163,17 @@ export function autoHealFailure(
   if (diags.length === 0) return undefined;
 
   const diag = diags[0]!;
-  // Find matching skill in memory by description or root cause
-  const promptMatches = memory.searchByPrompt(failedGoal.description + " " + diag.rootCause, 1);
-  const targetSkill = promptMatches.length > 0 ? promptMatches[0]! : memory.search(diag.rootCause, 1)[0];
+  // Find matching skill: direct match by slug/title in goal, then fuzzy searchByPrompt
+  let targetSkill = memory.active().find((e) =>
+    failedGoal.description.toLowerCase().includes(e.slug.toLowerCase()) ||
+    failedGoal.description.toLowerCase().includes(e.title.toLowerCase()) ||
+    failedGoal.events.some((ev) => JSON.stringify(ev.input ?? {}).toLowerCase().includes(e.slug.toLowerCase()))
+  );
+
+  if (!targetSkill) {
+    const promptMatches = memory.searchByPrompt(failedGoal.description, 1);
+    targetSkill = promptMatches.length > 0 ? promptMatches[0]! : (memory.searchByPrompt(diag.rootCause, 1)[0] ?? memory.search(diag.rootCause, 1)[0]);
+  }
   if (!targetSkill) return undefined;
   const existing = memory.readSkill(targetSkill.slug);
   if (!existing) return undefined;
