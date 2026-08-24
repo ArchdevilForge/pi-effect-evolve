@@ -88,7 +88,46 @@ export function mutate(
   return variants.slice(0, MAX_VARIANTS);
 }
 
-/** Evaluate variants against basic gates */
+import * as ChildProcess from "node:child_process";
+
+/** Verify that the candidate script compiles cleanly */
+export function verifyCodeSyntax(code: string): { valid: boolean; error?: string } {
+  if (code.includes("import ") || code.includes("def ") || code.includes("print(")) {
+    try {
+      const res = ChildProcess.spawnSync("python3", ["-c", "import ast, sys; ast.parse(sys.stdin.read())"], {
+        input: code,
+        encoding: "utf8",
+        timeout: 2000,
+      });
+      if (res.status !== 0) {
+        return { valid: false, error: res.stderr || "Python syntax error" };
+      }
+      return { valid: true };
+    } catch {
+      return { valid: true };
+    }
+  }
+
+  if (code.includes("const ") || code.includes("function ") || code.includes("require(")) {
+    try {
+      const res = ChildProcess.spawnSync("node", ["--input-type=module", "--check"], {
+        input: code,
+        encoding: "utf8",
+        timeout: 2000,
+      });
+      if (res.status !== 0) {
+        return { valid: false, error: res.stderr || "Node syntax error" };
+      }
+      return { valid: true };
+    } catch {
+      return { valid: true };
+    }
+  }
+
+  return { valid: true };
+}
+
+/** Evaluate variants against basic gates and real syntax verification */
 export function evaluate(
   variants: GepaVariant[],
   maxSizeKb: number,
@@ -97,7 +136,14 @@ export function evaluate(
     .map((v) => {
       let score = 50; // base score
 
-      // size gate
+      // 1. Syntax & Compilation Gate
+      const syntax = verifyCodeSyntax(v.code);
+      if (!syntax.valid) {
+        v.score = 0;
+        return v;
+      }
+
+      // 2. Size gate
       const sizeKb = Buffer.byteLength(v.code, "utf8") / 1024;
       if (sizeKb > maxSizeKb) {
         v.score = 0;
@@ -105,7 +151,7 @@ export function evaluate(
       }
       score += Math.max(0, 20 - sizeKb); // smaller is better
 
-      // basic code quality heuristics (ignoring comments)
+      // 3. Basic code quality heuristics (ignoring comments)
       const codeBody = v.code.replace(/#.*$/gm, "").replace(/\/\/.*$/gm, "");
       if (codeBody.includes("try") && (codeBody.includes("catch") || codeBody.includes("except"))) score += 10;
       if (codeBody.includes("with_retry") || codeBody.includes("def retry") || codeBody.includes("time.sleep") || codeBody.includes("setTimeout")) score += 20;

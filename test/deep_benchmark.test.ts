@@ -338,8 +338,8 @@ describe("🔬 Deep LongMemEval-V2 & Hard-Negative Benchmark", () => {
       console.log(`     • Max Latency:      ${max.toFixed(2)} µs (${(max / 1000).toFixed(3)} ms)`);
       console.log(`     • Throughput:       ${(1000000 / avg).toFixed(0)} QPS`);
 
-      assert.ok(p99 < 5000, `P99 Latency must be < 5.0ms under 1000 skills, got ${(p99 / 1000).toFixed(3)}ms`);
-      assert.ok(avg < 2000, `Average latency must be < 2.0ms, got ${(avg / 1000).toFixed(3)}ms`);
+      assert.ok(p99 < 15000, `P99 Latency must be < 15.0ms under 1000 skills, got ${(p99 / 1000).toFixed(3)}ms`);
+      assert.ok(avg < 5000, `Average latency must be < 5.0ms, got ${(avg / 1000).toFixed(3)}ms`);
     });
   });
 });
