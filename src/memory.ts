@@ -213,19 +213,31 @@ export class SkillMemory {
       "useCount" | "successCount" | "failureCount" | "deprecated" | "lastUsed"
     >,
   ): void {
-    const existing = this.index.entries.findIndex((e) => e.slug === entry.slug);
-    const full: SkillIndexEntry = {
-      ...entry,
-      lastUsed: entry.createdAt,
-      useCount: 0,
-      successCount: 0,
-      failureCount: 0,
-      deprecated: false,
-    };
-    if (existing >= 0) {
-      this.index.entries[existing] = full;
-    } else {
-      this.index.entries.push(full);
+    this.registerBatch([entry]);
+  }
+
+  /** Register multiple skills in bulk and save index once */
+  registerBatch(
+    entries: Omit<
+      SkillIndexEntry,
+      "useCount" | "successCount" | "failureCount" | "deprecated" | "lastUsed"
+    >[],
+  ): void {
+    for (const entry of entries) {
+      const existing = this.index.entries.findIndex((e) => e.slug === entry.slug);
+      const full: SkillIndexEntry = {
+        ...entry,
+        lastUsed: entry.createdAt,
+        useCount: 0,
+        successCount: 0,
+        failureCount: 0,
+        deprecated: false,
+      };
+      if (existing >= 0) {
+        this.index.entries[existing] = full;
+      } else {
+        this.index.entries.push(full);
+      }
     }
     this.save();
     this.rebuildInvertedIndex();
