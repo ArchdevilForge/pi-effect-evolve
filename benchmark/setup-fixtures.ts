@@ -64,7 +64,6 @@ export function setupBenchmarkFixtures(rootDir = process.cwd()): void {
     "utf8"
   );
 
-  // Verifier for JSON Extract
   Fs.writeFileSync(
     Path.join(verifiersBase, "verify_json_extract.py"),
     `import json, sys
@@ -267,32 +266,32 @@ except Exception as e:
   );
 
   // -------------------------------------------------------------
-  // 5. Gold Procedural Skills (For Warm Group C)
+  // 5. Genuine Executable Gold Procedural Skills (For Warm Group C)
   // -------------------------------------------------------------
   const goldSkills = [
     {
       slug: "gold-json-flatten",
       title: "Nested JSON Hierarchy Extractor",
       tags: ["json", "nested", "extract", "flatten", "hierarchy"],
-      code: `import json\ndef extract_nested(data, filter_key, filter_val, field_map):\n    results = []\n    # Traverse and extract matching items\n    return results\n`,
+      code: `import json\n\ndef extract_matching_devices(input_path, output_path, status_filter='online'):\n    with open(input_path) as f:\n        root = json.load(f)\n    items = []\n    for cluster in root.get('clusters', []):\n        for dev in cluster.get('devices', []):\n            if dev.get('status') == status_filter:\n                items.append({\n                    'deviceId': dev.get('deviceId'),\n                    'model': dev.get('model'),\n                    'ipAddress': dev.get('network', {}).get('ipAddress')\n                })\n    with open(output_path, 'w') as f:\n        json.dump(items, f, indent=2)\n    return items\n`,
     },
     {
       slug: "gold-csv-sanitizer",
       title: "RFC 4180 CSV Normalizer & Delimiter Sanitizer",
       tags: ["csv", "cleanup", "delimiter", "quotes", "sanitizer"],
-      code: `import csv\ndef sanitize_csv(src_file, dst_file, delimiter=';'):\n    with open(src_file, newline='') as f:\n        reader = csv.reader(f, delimiter=delimiter)\n        rows = [r for r in reader if any(r)]\n    with open(dst_file, 'w', newline='') as f:\n        writer = csv.writer(f)\n        writer.writerows(rows)\n`,
+      code: `import csv\n\ndef clean_delimited_file(src_path, dst_path, in_delimiter='\\t'):\n    with open(src_path, newline='') as f:\n        lines = [line.strip() for line in f if line.strip()]\n    rows = [line.split(in_delimiter) for line in lines]\n    with open(dst_path, 'w', newline='') as f:\n        writer = csv.writer(f)\n        writer.writerows(rows)\n    return len(rows)\n`,
     },
     {
       slug: "gold-unittest-debugger",
       title: "Python Unit Test Fixer & Verification Runner",
       tags: ["unittest", "test", "repair", "debug", "calculator", "sort"],
-      code: `import subprocess\ndef run_tests(test_file):\n    return subprocess.run(['python3', '-m', 'unittest', test_file], capture_output=True, text=True)\n`,
+      code: `import subprocess\n\ndef run_and_verify_test(test_module):\n    res = subprocess.run(['python3', '-m', 'unittest', test_module], capture_output=True, text=True)\n    return res.returncode == 0 and 'OK' in res.stderr\n`,
     },
     {
       slug: "gold-log-parser",
       title: "Regex Exception Log Aggregator & Traceback Extractor",
       tags: ["log", "diagnosis", "traceback", "exception", "regex", "summary"],
-      code: `import re, json\ndef parse_log_exceptions(log_path):\n    errors = {}\n    with open(log_path) as f:\n        for line in f:\n            m = re.search(r'ERROR (\\w+Error|\\w+Exception)', line)\n            if m:\n                err = m.group(1)\n                errors[err] = errors.get(err, 0) + 1\n    return errors\n`,
+      code: `import re, json\n\ndef extract_fatal_cause(log_path, output_path):\n    with open(log_path) as f:\n        content = f.read()\n    line_m = re.search(r'line (\\d+)', content)\n    err_m = re.search(r'([A-Za-z_]+Error|[A-Za-z_]+Exception)', content)\n    file_m = re.search(r'File "([^"]+)"', content)\n    result = {\n        'error': err_m.group(1) if err_m else 'UnknownError',\n        'line': int(line_m.group(1)) if line_m else 0,\n        'file': file_m.group(1) if file_m else 'unknown.py'\n    }\n    with open(output_path, 'w') as f:\n        json.dump(result, f, indent=2)\n    return result\n`,
     },
   ];
 

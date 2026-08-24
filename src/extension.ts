@@ -139,6 +139,12 @@ export default function (pi: ExtensionAPI) {
 
     let injection = "";
     if (matches.length > 0) {
+      appendAudit(ctx.cwd, {
+        event: "recall",
+        skills: matches.map((m) => m.slug),
+        prompt: event.prompt.slice(0, 100),
+      });
+
       const skillBlocks = matches
         .map(
           (m) =>

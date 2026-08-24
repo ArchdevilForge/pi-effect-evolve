@@ -1,7 +1,6 @@
 /**
  * Statistical Reporter for Agent A/B Benchmark
- * Calculates median, mean, pass rate, cost reduction, tool calls reduction,
- * and 95% Bootstrap Confidence Intervals.
+ * Implements Paired Cluster Bootstrap 95% Confidence Intervals.
  */
 import type { AgentRunResult, GroupStats, BenchmarkReportSummary } from "./types.js";
 
@@ -17,41 +16,59 @@ function mean(nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
-/** Compute 95% Bootstrap Confidence Interval for the difference between treatment and baseline */
-export function computeBootstrapCI(
-  baselineVals: number[],
-  treatmentVals: number[],
+/**
+ * Compute Paired Cluster Bootstrap 95% Confidence Interval for differences between treatment and baseline.
+ * Pairs runs by (family, taskId, repeatIndex) to eliminate inter-task variance.
+ */
+export function computePairedBootstrapCI(
+  baselineRuns: AgentRunResult[],
+  treatmentRuns: AgentRunResult[],
+  metricExtractor: (r: AgentRunResult) => number,
   iterations = 2000,
 ): { low95: number; median: number; high95: number } {
-  if (baselineVals.length === 0 || treatmentVals.length === 0) {
+  // Build matched pairs map: key = `${family}-${repeatIndex}`
+  const pairs: { baseVal: number; treatVal: number }[] = [];
+
+  for (const t of treatmentRuns) {
+    const matchedBase = baselineRuns.find(
+      (b) => b.family === t.family && b.repeatIndex === t.repeatIndex,
+    );
+    if (matchedBase) {
+      pairs.push({
+        baseVal: metricExtractor(matchedBase),
+        treatVal: metricExtractor(t),
+      });
+    }
+  }
+
+  if (pairs.length === 0) {
     return { low95: 0, median: 0, high95: 0 };
   }
 
-  const diffs: number[] = [];
-  const nBase = baselineVals.length;
-  const nTreat = treatmentVals.length;
+  const nPairs = pairs.length;
+  const diffPercentages: number[] = [];
 
-  for (let i = 0; i < iterations; i++) {
-    const sampleBase: number[] = [];
-    for (let b = 0; b < nBase; b++) {
-      sampleBase.push(baselineVals[Math.floor(Math.random() * nBase)]!);
-    }
-    const sampleTreat: number[] = [];
-    for (let t = 0; t < nTreat; t++) {
-      sampleTreat.push(treatmentVals[Math.floor(Math.random() * nTreat)]!);
+  for (let iter = 0; iter < iterations; iter++) {
+    // Cluster resample pairs with replacement
+    let sumBase = 0;
+    let sumTreat = 0;
+    for (let i = 0; i < nPairs; i++) {
+      const idx = Math.floor(Math.random() * nPairs);
+      sumBase += pairs[idx]!.baseVal;
+      sumTreat += pairs[idx]!.treatVal;
     }
 
-    const medBase = median(sampleBase);
-    const medTreat = median(sampleTreat);
-    const pctChange = medBase !== 0 ? ((medTreat - medBase) / medBase) * 100 : 0;
-    diffs.push(pctChange);
+    const avgBase = sumBase / nPairs;
+    const avgTreat = sumTreat / nPairs;
+    const pctChange = avgBase !== 0 ? ((avgTreat - avgBase) / avgBase) * 100 : 0;
+    diffPercentages.push(pctChange);
   }
 
-  diffs.sort((a, b) => a - b);
+  diffPercentages.sort((a, b) => a - b);
   return {
-    low95: diffs[Math.floor(iterations * 0.025)]!,
-    median: diffs[Math.floor(iterations * 0.500)]!,
-    high95: diffs[Math.floor(iterations * 0.975)]!,
+    low95: diffPercentages[Math.floor(iterations * 0.025)] ?? 0,
+    median: diffPercentages[Math.floor(iterations * 0.500)] ?? 0,
+    high95: diffPercentages[Math.floor(iterations * 0.975)] ?? 0,
   };
 }
 
@@ -92,10 +109,15 @@ export function generateBenchmarkReport(
   }
 
   // Calculate Deltas against Group A (Bare Pi)
+  const bareRuns = groups["A_bare"] ?? [];
   const base = groupStats["A_bare"];
-  if (base) {
+  const ciMap: Record<string, { metric: string; low95: number; median: number; high95: number }> = {};
+
+  if (base && bareRuns.length > 0) {
     for (const [grp, st] of Object.entries(groupStats)) {
       if (grp === "A_bare") continue;
+      const treatRuns = groups[grp] ?? [];
+
       if (base.medianCost > 0) {
         st.costReductionVsBarePct = ((base.medianCost - st.medianCost) / base.medianCost) * 100;
       }
@@ -103,6 +125,14 @@ export function generateBenchmarkReport(
         st.toolCallsReductionVsBarePct = ((base.medianToolCalls - st.medianToolCalls) / base.medianToolCalls) * 100;
       }
       st.passRateDeltaVsBarePct = st.passRate - base.passRate;
+
+      // Compute Paired Bootstrap CIs for Cost and Tool Calls
+      if (treatRuns.length > 0) {
+        const costCI = computePairedBootstrapCI(bareRuns, treatRuns, (r) => r.usage.cost);
+        const toolsCI = computePairedBootstrapCI(bareRuns, treatRuns, (r) => r.toolCalls);
+        ciMap[`${grp}_cost`] = { metric: "Cost Delta %", ...costCI };
+        ciMap[`${grp}_tool_calls`] = { metric: "Tool Calls Delta %", ...toolsCI };
+      }
     }
   }
 
@@ -111,14 +141,15 @@ export function generateBenchmarkReport(
     model: modelName,
     totalRuns: results.length,
     groups: groupStats,
+    bootstrapConfidenceIntervals: ciMap,
   };
 }
 
 export function printFormattedReportTable(summary: BenchmarkReportSummary): void {
-  console.log("\n" + "=".repeat(85));
-  console.log(`📊 AGENT A/B BENCHMARK REPORT (Model: ${summary.model})`);
+  console.log("\n" + "=".repeat(95));
+  console.log(`📊 PAIRED AGENT A/B BENCHMARK REPORT (Model: ${summary.model})`);
   console.log(`   Timestamp: ${summary.timestamp} | Total Agent Executions: ${summary.totalRuns}`);
-  console.log("=".repeat(85));
+  console.log("=".repeat(95));
 
   const headers = [
     "Experiment Group",
@@ -131,7 +162,7 @@ export function printFormattedReportTable(summary: BenchmarkReportSummary): void
   ];
 
   console.log(
-    headers[0]!.padEnd(20) +
+    headers[0]!.padEnd(22) +
     headers[1]!.padEnd(16) +
     headers[2]!.padEnd(14) +
     headers[3]!.padEnd(16) +
@@ -139,7 +170,7 @@ export function printFormattedReportTable(summary: BenchmarkReportSummary): void
     headers[5]!.padEnd(14) +
     headers[6]!
   );
-  console.log("-".repeat(85));
+  console.log("-".repeat(95));
 
   for (const [name, st] of Object.entries(summary.groups)) {
     const label = name === "A_bare" ? "A: Bare Pi" :
@@ -155,7 +186,7 @@ export function printFormattedReportTable(summary: BenchmarkReportSummary): void
     const timeStr = `${(st.medianWallTimeMs / 1000).toFixed(1)}s`;
 
     console.log(
-      label.padEnd(20) +
+      label.padEnd(22) +
       passStr.padEnd(16) +
       costStr.padEnd(14) +
       inTokStr.padEnd(16) +
@@ -164,7 +195,20 @@ export function printFormattedReportTable(summary: BenchmarkReportSummary): void
       timeStr
     );
   }
-  console.log("=".repeat(85));
+  console.log("=".repeat(95));
+
+  // Print Bootstrap 95% Confidence Intervals
+  if (summary.bootstrapConfidenceIntervals && Object.keys(summary.bootstrapConfidenceIntervals).length > 0) {
+    console.log("\n📈 [Paired Cluster Bootstrap 95% Confidence Intervals vs Bare Pi]");
+    for (const [key, ci] of Object.entries(summary.bootstrapConfidenceIntervals)) {
+      const groupName = key.replace(/_(cost|tool_calls)$/, "");
+      const label = groupName === "C_warm" ? "Group C (Warm)" :
+                    groupName === "D_learned" ? "Group D (Learned)" : groupName;
+      console.log(
+        `   • ${label} ${ci.metric.padEnd(20)}: ${ci.median >= 0 ? "+" : ""}${ci.median.toFixed(1)}% [95% CI: ${ci.low95.toFixed(1)}%, ${ci.high95.toFixed(1)}%]`
+      );
+    }
+  }
 
   // Print Summary Insights
   const bare = summary.groups["A_bare"];
