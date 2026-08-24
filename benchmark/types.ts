@@ -56,11 +56,15 @@ export interface GroupStats {
   meanCost: number;
   medianInputTokens: number;
   medianOutputTokens: number;
+  medianCacheReadTokens: number;
+  medianTotalTokens: number;
   medianToolCalls: number;
   meanToolErrors: number;
   medianWallTimeMs: number;
   costReductionVsBarePct?: number | undefined;
+  totalTokensReductionVsBarePct?: number | undefined;
   toolCallsReductionVsBarePct?: number | undefined;
+  wallTimeReductionVsBarePct?: number | undefined;
   passRateDeltaVsBarePct?: number | undefined;
 }
 
@@ -72,8 +76,27 @@ export interface LearningCoverageReport {
   crystallizeRatePct: number;
   heldoutRecallCount: number;
   heldoutRecallRatePct: number;
+  usefulRecallCount: number;
+  usefulRecallRatePct: number;
   medianTrainCost: number;
   breakEvenReuses?: number | undefined;
+}
+
+export interface FamilyBreakdownRow {
+  family: string;
+  barePassRatePct: number;
+  learnedPassRatePct: number;
+  bareMedianTools: number;
+  learnedMedianTools: number;
+  toolsDeltaPct: number;
+  bareMedianTotalTokens: number;
+  learnedMedianTotalTokens: number;
+  totalTokensDeltaPct: number;
+  bareMedianTimeSec: number;
+  learnedMedianTimeSec: number;
+  timeDeltaPct: number;
+  learnedRecallRatePct: number;
+  usefulRecallRatePct: number;
 }
 
 export interface BenchmarkReportSummary {
@@ -83,6 +106,7 @@ export interface BenchmarkReportSummary {
   totalRuns: number;
   groups: Record<string, GroupStats>;
   learningCoverage?: LearningCoverageReport | undefined;
+  familyBreakdown?: FamilyBreakdownRow[] | undefined;
   bootstrapConfidenceIntervals?: Record<string, {
     metric: string;
     low95: number;

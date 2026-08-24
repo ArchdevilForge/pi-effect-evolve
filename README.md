@@ -1,6 +1,6 @@
 # pi-effect-evolve
 
-> **A lightweight Procedural Memory & Skill Cache layer for `pi` — caching verified scripts, indexing reusable workflows, and providing syntax-verified mutation in an Effect-managed harness.**
+> **A lightweight Procedural Memory & Experience Crystallization layer for `pi` — caching verified scripts, indexing reusable workflows, and transferring learned execution patterns across tasks in an Effect-managed harness.**
 
 ---
 
