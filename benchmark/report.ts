@@ -1,8 +1,8 @@
 /**
  * Statistical Reporter for Agent A/B Benchmark
- * Implements Paired Cluster Bootstrap 95% Confidence Intervals.
+ * Implements Paired Cluster Bootstrap (resampled by task families) and Learning Coverage accounting.
  */
-import type { AgentRunResult, GroupStats, BenchmarkReportSummary } from "./types.js";
+import type { AgentRunResult, GroupStats, BenchmarkReportSummary, LearningCoverageReport } from "./types.js";
 
 function median(nums: number[]): number {
   if (nums.length === 0) return 0;
@@ -16,65 +16,78 @@ function mean(nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
+/** PRNG for reproducible bootstrap sampling */
+function seededRandom(seed: number): () => number {
+  let s = seed % 2147483647;
+  if (s <= 0) s += 2147483646;
+  return () => {
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
 /**
- * Compute Paired Cluster Bootstrap 95% Confidence Interval for differences between treatment and baseline.
- * Pairs runs by (family, taskId, repeatIndex) to eliminate inter-task variance.
+ * Compute Paired Cluster Bootstrap 95% Confidence Interval.
+ * Resamples entire family clusters to prevent intra-family correlation inflation.
  */
-export function computePairedBootstrapCI(
+export function computePairedClusterBootstrapCI(
   baselineRuns: AgentRunResult[],
   treatmentRuns: AgentRunResult[],
   metricExtractor: (r: AgentRunResult) => number,
+  seed = 20260824,
   iterations = 2000,
 ): { low95: number; median: number; high95: number } {
-  // Build matched pairs map: key = `${family}-${repeatIndex}`
-  const pairs: { baseVal: number; treatVal: number }[] = [];
+  // Collect all unique task families
+  const families = Array.from(new Set(baselineRuns.map((r) => r.family)));
+  if (families.length === 0) return { low95: 0, median: 0, high95: 0 };
 
-  for (const t of treatmentRuns) {
-    const matchedBase = baselineRuns.find(
-      (b) => b.family === t.family && b.repeatIndex === t.repeatIndex,
-    );
-    if (matchedBase) {
-      pairs.push({
-        baseVal: metricExtractor(matchedBase),
-        treatVal: metricExtractor(t),
-      });
-    }
-  }
-
-  if (pairs.length === 0) {
-    return { low95: 0, median: 0, high95: 0 };
-  }
-
-  const nPairs = pairs.length;
+  const rand = seededRandom(seed);
   const diffPercentages: number[] = [];
 
   for (let iter = 0; iter < iterations; iter++) {
-    // Cluster resample pairs with replacement
     let sumBase = 0;
     let sumTreat = 0;
-    for (let i = 0; i < nPairs; i++) {
-      const idx = Math.floor(Math.random() * nPairs);
-      sumBase += pairs[idx]!.baseVal;
-      sumTreat += pairs[idx]!.treatVal;
+    let count = 0;
+
+    // Resample family clusters with replacement
+    for (let f = 0; f < families.length; f++) {
+      const sampledFamily = families[Math.floor(rand() * families.length)]!;
+      const baseFamilyRuns = baselineRuns.filter((r) => r.family === sampledFamily);
+      const treatFamilyRuns = treatmentRuns.filter((r) => r.family === sampledFamily);
+
+      for (const t of treatFamilyRuns) {
+        const matchedBase = baseFamilyRuns.find((b) => b.repeatIndex === t.repeatIndex && b.taskId === t.taskId) ?? baseFamilyRuns[0];
+        if (matchedBase) {
+          sumBase += metricExtractor(matchedBase);
+          sumTreat += metricExtractor(t);
+          count++;
+        }
+      }
     }
 
-    const avgBase = sumBase / nPairs;
-    const avgTreat = sumTreat / nPairs;
-    const pctChange = avgBase !== 0 ? ((avgTreat - avgBase) / avgBase) * 100 : 0;
-    diffPercentages.push(pctChange);
+    if (count > 0 && sumBase > 0) {
+      const avgBase = sumBase / count;
+      const avgTreat = sumTreat / count;
+      const pctChange = ((avgTreat - avgBase) / avgBase) * 100;
+      diffPercentages.push(pctChange);
+    }
   }
+
+  if (diffPercentages.length === 0) return { low95: 0, median: 0, high95: 0 };
 
   diffPercentages.sort((a, b) => a - b);
   return {
-    low95: diffPercentages[Math.floor(iterations * 0.025)] ?? 0,
-    median: diffPercentages[Math.floor(iterations * 0.500)] ?? 0,
-    high95: diffPercentages[Math.floor(iterations * 0.975)] ?? 0,
+    low95: diffPercentages[Math.floor(diffPercentages.length * 0.025)] ?? 0,
+    median: diffPercentages[Math.floor(diffPercentages.length * 0.500)] ?? 0,
+    high95: diffPercentages[Math.floor(diffPercentages.length * 0.975)] ?? 0,
   };
 }
 
 export function generateBenchmarkReport(
   results: AgentRunResult[],
   modelName = "active-model",
+  thinkingLevel = "high",
+  seed = 20260824,
 ): BenchmarkReportSummary {
   const groups: Record<string, AgentRunResult[]> = {};
   for (const r of results) {
@@ -126,29 +139,65 @@ export function generateBenchmarkReport(
       }
       st.passRateDeltaVsBarePct = st.passRate - base.passRate;
 
-      // Compute Paired Bootstrap CIs for Cost and Tool Calls
+      // Compute Paired Cluster Bootstrap CIs for Cost and Tool Calls
       if (treatRuns.length > 0) {
-        const costCI = computePairedBootstrapCI(bareRuns, treatRuns, (r) => r.usage.cost);
-        const toolsCI = computePairedBootstrapCI(bareRuns, treatRuns, (r) => r.toolCalls);
+        const costCI = computePairedClusterBootstrapCI(bareRuns, treatRuns, (r) => r.usage.cost, seed);
+        const toolsCI = computePairedClusterBootstrapCI(bareRuns, treatRuns, (r) => r.toolCalls, seed);
         ciMap[`${grp}_cost`] = { metric: "Cost Delta %", ...costCI };
         ciMap[`${grp}_tool_calls`] = { metric: "Tool Calls Delta %", ...toolsCI };
       }
     }
   }
 
+  // Compute Learning Coverage for Group D
+  let learningCoverage: LearningCoverageReport | undefined = undefined;
+  const dRuns = groups["D_learned"] ?? [];
+  if (dRuns.length > 0) {
+    const withTrain = dRuns.filter((r) => r.trainPassed !== undefined);
+    const trainPassCount = withTrain.filter((r) => r.trainPassed === true).length;
+    const crystallizeCount = withTrain.filter((r) => (r.trainCrystallizedCount ?? 0) > 0).length;
+    const recallCount = withTrain.filter((r) => r.heldoutRecalledLearnedSkill === true || r.recalledSkills.length > 0).length;
+    const trainCosts = withTrain.map((r) => r.trainCost ?? 0);
+    const medTrainCost = median(trainCosts);
+
+    const baseMedCost = base?.medianCost ?? 0;
+    const dMedCost = groupStats["D_learned"]?.medianCost ?? 0;
+    const savingsPerRun = baseMedCost - dMedCost;
+    const breakEvenReuses = savingsPerRun > 0 && medTrainCost > 0 ? medTrainCost / savingsPerRun : undefined;
+
+    learningCoverage = {
+      trainTotal: withTrain.length,
+      trainPassCount,
+      trainPassRatePct: withTrain.length > 0 ? (trainPassCount / withTrain.length) * 100 : 0,
+      crystallizeCount,
+      crystallizeRatePct: withTrain.length > 0 ? (crystallizeCount / withTrain.length) * 100 : 0,
+      heldoutRecallCount: recallCount,
+      heldoutRecallRatePct: withTrain.length > 0 ? (recallCount / withTrain.length) * 100 : 0,
+      medianTrainCost: medTrainCost,
+      breakEvenReuses,
+    };
+  }
+
   return {
     timestamp: new Date().toISOString(),
     model: modelName,
+    thinkingLevel,
     totalRuns: results.length,
     groups: groupStats,
+    learningCoverage,
     bootstrapConfidenceIntervals: ciMap,
+    metadata: {
+      seed,
+      families: Array.from(new Set(results.map((r) => r.family))).length,
+      tasks: Array.from(new Set(results.map((r) => r.taskId))).length,
+    },
   };
 }
 
 export function printFormattedReportTable(summary: BenchmarkReportSummary): void {
   console.log("\n" + "=".repeat(95));
-  console.log(`📊 PAIRED AGENT A/B BENCHMARK REPORT (Model: ${summary.model})`);
-  console.log(`   Timestamp: ${summary.timestamp} | Total Agent Executions: ${summary.totalRuns}`);
+  console.log(`📊 PAIRED AGENT A/B BENCHMARK REPORT (Model: ${summary.model} | Thinking: ${summary.thinkingLevel})`);
+  console.log(`   Timestamp: ${summary.timestamp} | Total Executions: ${summary.totalRuns}`);
   console.log("=".repeat(95));
 
   const headers = [
@@ -197,7 +246,20 @@ export function printFormattedReportTable(summary: BenchmarkReportSummary): void
   }
   console.log("=".repeat(95));
 
-  // Print Bootstrap 95% Confidence Intervals
+  // Print Group D Learning Coverage & Amortization
+  if (summary.learningCoverage && summary.learningCoverage.trainTotal > 0) {
+    const cov = summary.learningCoverage;
+    console.log("\n🧬 [Group D: Autonomous Learning Coverage & Amortization]");
+    console.log(`   • Train Task Pass Rate:        ${cov.trainPassRatePct.toFixed(1)}% (${cov.trainPassCount}/${cov.trainTotal})`);
+    console.log(`   • Skill Crystallization Rate:  ${cov.crystallizeRatePct.toFixed(1)}% (${cov.crystallizeCount}/${cov.trainTotal})`);
+    console.log(`   • Held-out Learned Recall:     ${cov.heldoutRecallRatePct.toFixed(1)}% (${cov.heldoutRecallCount}/${cov.trainTotal})`);
+    console.log(`   • Median One-Time Train Cost:  $${cov.medianTrainCost.toFixed(4)}`);
+    if (cov.breakEvenReuses !== undefined) {
+      console.log(`   • Amortization Break-Even:     ~${cov.breakEvenReuses.toFixed(1)} task reuses to offset training cost`);
+    }
+  }
+
+  // Print Paired Cluster Bootstrap 95% Confidence Intervals
   if (summary.bootstrapConfidenceIntervals && Object.keys(summary.bootstrapConfidenceIntervals).length > 0) {
     console.log("\n📈 [Paired Cluster Bootstrap 95% Confidence Intervals vs Bare Pi]");
     for (const [key, ci] of Object.entries(summary.bootstrapConfidenceIntervals)) {
@@ -231,6 +293,7 @@ export function printFormattedReportTable(summary: BenchmarkReportSummary): void
   if (bare && learned) {
     console.log("\n💡 [Key A/B Findings: Autonomous Learned Skills vs Bare Pi]");
     if (learned.toolCallsReductionVsBarePct !== undefined) {
+      console.log(`   • Cost Delta:        ${learned.costReductionVsBarePct !== undefined && learned.costReductionVsBarePct >= 0 ? "-" : "+"}${Math.abs(learned.costReductionVsBarePct ?? 0).toFixed(1)}%`);
       console.log(`   • Tool Calls Delta:  ${learned.toolCallsReductionVsBarePct >= 0 ? "-" : "+"}${Math.abs(learned.toolCallsReductionVsBarePct).toFixed(1)}%`);
     }
     if (learned.passRateDeltaVsBarePct !== undefined) {

@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import { parsePiJsonLines } from "../benchmark/parse-pi-events.js";
-import { generateBenchmarkReport, computePairedBootstrapCI } from "../benchmark/report.js";
+import { generateBenchmarkReport, computePairedClusterBootstrapCI } from "../benchmark/report.js";
 import { setupBenchmarkFixtures } from "../benchmark/setup-fixtures.js";
 import type { AgentRunResult } from "../benchmark/types.js";
 
@@ -109,7 +109,7 @@ describe("🧪 Benchmark Harness Component Tests", () => {
     assert.ok((report.groups["C_warm"]?.costReductionVsBarePct ?? 0) > 40);
     assert.ok((report.groups["C_warm"]?.toolCallsReductionVsBarePct ?? 0) > 50);
 
-    const ci = computePairedBootstrapCI(mockResults.slice(0, 2), mockResults.slice(2, 4), (r) => r.toolCalls, 100);
+    const ci = computePairedClusterBootstrapCI(mockResults.slice(0, 2), mockResults.slice(2, 4), (r: AgentRunResult) => r.toolCalls, 20260824, 100);
     assert.ok(ci.median < 0, "Median change should be negative (reduction)");
   });
 

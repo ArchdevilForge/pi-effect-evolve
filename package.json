@@ -1,7 +1,7 @@
 {
   "name": "@archdevil/pi-effect-evolve",
   "version": "0.2.0",
-  "description": "Zero-touch autonomous memory & self-evolution runtime for pi. Distills GenericAgent (crystallize) & Hermes (GEPA) into an Effect-managed harness with auto-recall, auto-crystallize, and auto-healing.",
+  "description": "A lightweight Procedural Memory & Skill Cache layer for pi coding agent with semantic recall, conservative auto-crystallization, and syntax-verified repair.",
   "type": "module",
   "license": "MIT",
   "author": "ArchdevilForge",

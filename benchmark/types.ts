@@ -38,6 +38,13 @@ export interface AgentRunResult {
   crystallizedSkills: string[];
   exitCode: number;
   error?: string | undefined;
+  // Stage 1 Training Metadata for Group D
+  trainPassed?: boolean | undefined;
+  trainCost?: number | undefined;
+  trainInputTokens?: number | undefined;
+  trainCrystallizedCount?: number | undefined;
+  trainWallTimeMs?: number | undefined;
+  heldoutRecalledLearnedSkill?: boolean | undefined;
 }
 
 export interface GroupStats {
@@ -57,15 +64,30 @@ export interface GroupStats {
   passRateDeltaVsBarePct?: number | undefined;
 }
 
+export interface LearningCoverageReport {
+  trainTotal: number;
+  trainPassCount: number;
+  trainPassRatePct: number;
+  crystallizeCount: number;
+  crystallizeRatePct: number;
+  heldoutRecallCount: number;
+  heldoutRecallRatePct: number;
+  medianTrainCost: number;
+  breakEvenReuses?: number | undefined;
+}
+
 export interface BenchmarkReportSummary {
   timestamp: string;
   model: string;
+  thinkingLevel: string;
   totalRuns: number;
   groups: Record<string, GroupStats>;
+  learningCoverage?: LearningCoverageReport | undefined;
   bootstrapConfidenceIntervals?: Record<string, {
     metric: string;
     low95: number;
     median: number;
     high95: number;
-  }>;
+  }> | undefined;
+  metadata?: Record<string, string | number> | undefined;
 }

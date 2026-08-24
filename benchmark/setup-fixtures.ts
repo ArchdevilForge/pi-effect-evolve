@@ -279,19 +279,19 @@ except Exception as e:
       slug: "gold-csv-sanitizer",
       title: "RFC 4180 CSV Normalizer & Delimiter Sanitizer",
       tags: ["csv", "cleanup", "delimiter", "quotes", "sanitizer"],
-      code: `import csv\n\ndef clean_delimited_file(src_path, dst_path, in_delimiter='\\t'):\n    with open(src_path, newline='') as f:\n        lines = [line.strip() for line in f if line.strip()]\n    rows = [line.split(in_delimiter) for line in lines]\n    with open(dst_path, 'w', newline='') as f:\n        writer = csv.writer(f)\n        writer.writerows(rows)\n    return len(rows)\n`,
+      code: `import csv\n\ndef clean_delimited_file(src_path, dst_path, in_delimiter=None):\n    with open(src_path, newline='') as f:\n        content = f.read()\n    lines = [line.strip() for line in content.splitlines() if line.strip()]\n    if not in_delimiter and lines:\n        in_delimiter = ';' if ';' in lines[0] else '\\t' if '\\t' in lines[0] else ','\n    rows = [line.split(in_delimiter or ',') for line in lines]\n    with open(dst_path, 'w', newline='') as f:\n        writer = csv.writer(f)\n        writer.writerows(rows)\n    return len(rows)\n`,
     },
     {
       slug: "gold-unittest-debugger",
       title: "Python Unit Test Fixer & Verification Runner",
       tags: ["unittest", "test", "repair", "debug", "calculator", "sort"],
-      code: `import subprocess\n\ndef run_and_verify_test(test_module):\n    res = subprocess.run(['python3', '-m', 'unittest', test_module], capture_output=True, text=True)\n    return res.returncode == 0 and 'OK' in res.stderr\n`,
+      code: `import subprocess\n\ndef run_and_verify_test(test_target):\n    module = test_target[:-3] if test_target.endswith('.py') else test_target\n    res = subprocess.run(['python3', '-m', 'unittest', module], capture_output=True, text=True)\n    return res.returncode == 0 and ('OK' in res.stderr or 'OK' in res.stdout or 'Ran' in res.stderr)\n`,
     },
     {
       slug: "gold-log-parser",
       title: "Regex Exception Log Aggregator & Traceback Extractor",
       tags: ["log", "diagnosis", "traceback", "exception", "regex", "summary"],
-      code: `import re, json\n\ndef extract_fatal_cause(log_path, output_path):\n    with open(log_path) as f:\n        content = f.read()\n    line_m = re.search(r'line (\\d+)', content)\n    err_m = re.search(r'([A-Za-z_]+Error|[A-Za-z_]+Exception)', content)\n    file_m = re.search(r'File "([^"]+)"', content)\n    result = {\n        'error': err_m.group(1) if err_m else 'UnknownError',\n        'line': int(line_m.group(1)) if line_m else 0,\n        'file': file_m.group(1) if file_m else 'unknown.py'\n    }\n    with open(output_path, 'w') as f:\n        json.dump(result, f, indent=2)\n    return result\n`,
+      code: `import re, json\n\ndef extract_fatal_cause(log_path, output_path):\n    with open(log_path) as f:\n        content = f.read()\n    line_m = re.search(r'line (\\d+)', content)\n    err_m = re.search(r'([A-Za-z_]+(?:Error|Exception|Denied))', content)\n    file_m = re.search(r'File "([^"]+)"', content)\n    result = {\n        'error': err_m.group(1) if err_m else 'UnknownError',\n        'line': int(line_m.group(1)) if line_m else 0,\n        'file': file_m.group(1) if file_m else 'unknown.py'\n    }\n    with open(output_path, 'w') as f:\n        json.dump(result, f, indent=2)\n    return result\n`,
     },
   ];
 

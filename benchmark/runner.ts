@@ -100,6 +100,7 @@ export async function executeAgentTask(
   extensionPath: string,
   options?: {
     modelName?: string | undefined;
+    thinkingLevel?: string | undefined;
     learnedMemoryDir?: string | undefined;
     keepFailures?: boolean | undefined;
     mode?: "auto" | "conservative" | undefined;
@@ -167,6 +168,9 @@ export async function executeAgentTask(
 
   if (options?.modelName) {
     piArgs.push("--model", options.modelName);
+  }
+  if (options?.thinkingLevel) {
+    piArgs.push("--thinking", options.thinkingLevel);
   }
 
   if (group !== "A_bare") {
@@ -269,7 +273,12 @@ export async function main(): Promise<void> {
   const seed = 20260824;
   const rand = seededRandom(seed);
 
-  console.log(`🚀 Starting Paired Agent A/B Benchmark (Repeats: ${repeats}, Smoke: ${isSmoke}, Seed: ${seed})`);
+  // Parse explicit model and thinking flags
+  const modelArg = args.find((a) => a.startsWith("--model="))?.split("=")[1] || process.env.PI_BENCHMARK_MODEL || "muse-spark-1.2-contributor";
+  const thinkingArg = args.find((a) => a.startsWith("--thinking="))?.split("=")[1] || process.env.PI_BENCHMARK_THINKING || "high";
+
+  console.log(`🚀 Starting Paired Agent A/B Benchmark`);
+  console.log(`   Model: ${modelArg} | Thinking: ${thinkingArg} | Repeats: ${repeats} | Seed: ${seed} | Smoke: ${isSmoke}`);
 
   // 1. Setup Deterministic Fixtures
   setupBenchmarkFixtures();
@@ -299,16 +308,27 @@ export async function main(): Promise<void> {
 
       for (let r = 0; r < repeats; r++) {
         let learnedMemoryDir: string | undefined = undefined;
+        let trainMeta: { passed: boolean; cost: number; inputTokens: number; crystallizedCount: number; wallTimeMs: number; learnedSlugs: string[] } | undefined = undefined;
 
         // --- Step 1: Group D Train Stage (if trainTask exists) ---
         if (trainTask) {
           process.stdout.write(`     ↳ [D_learned: Step 1 Train (#${r + 1})]... `);
           const trainRes = await executeAgentTask(trainTask, "D_learned", r, extPath, {
+            modelName: modelArg,
+            thinkingLevel: thinkingArg,
             mode: "auto", // Allow crystallization
             keepFailures,
           });
           learnedMemoryDir = trainRes.learnedMemoryDir;
-          console.log(trainRes.passed ? `✅ Train Ok (${(trainRes.wallTimeMs / 1000).toFixed(1)}s, ${trainRes.crystallizedSkills.length} skills)` : `⚠️ Train Failed`);
+          trainMeta = {
+            passed: trainRes.passed,
+            cost: trainRes.usage.cost,
+            inputTokens: trainRes.usage.inputTokens,
+            crystallizedCount: trainRes.crystallizedSkills.length,
+            wallTimeMs: trainRes.wallTimeMs,
+            learnedSlugs: trainRes.crystallizedSkills,
+          };
+          console.log(trainRes.passed ? `✅ Train Ok (${(trainRes.wallTimeMs / 1000).toFixed(1)}s, ${trainRes.crystallizedSkills.length} skills crystallized)` : `⚠️ Train Failed`);
         }
 
         // --- Step 2: Randomized A/B/C/D Execution on Held-out ---
@@ -318,10 +338,23 @@ export async function main(): Promise<void> {
         for (const grp of randomizedGroups) {
           process.stdout.write(`     ↳ [${grp} Held-out Trial #${r + 1}]... `);
           const res = await executeAgentTask(heldout, grp, r, extPath, {
+            modelName: modelArg,
+            thinkingLevel: thinkingArg,
             mode: "conservative", // Frozen memory during test
             learnedMemoryDir: grp === "D_learned" ? learnedMemoryDir : undefined,
             keepFailures,
           });
+
+          // Link training metadata for Group D
+          if (grp === "D_learned" && trainMeta) {
+            res.trainPassed = trainMeta.passed;
+            res.trainCost = trainMeta.cost;
+            res.trainInputTokens = trainMeta.inputTokens;
+            res.trainCrystallizedCount = trainMeta.crystallizedCount;
+            res.trainWallTimeMs = trainMeta.wallTimeMs;
+            res.heldoutRecalledLearnedSkill = res.recalledSkills.some((s) => trainMeta?.learnedSlugs.includes(s));
+          }
+
           allResults.push(res);
           console.log(res.passed ? `✅ PASS (${(res.wallTimeMs / 1000).toFixed(1)}s, ${res.toolCalls} tools)` : `❌ FAIL (${res.error?.slice(0, 30)})`);
         }
@@ -335,11 +368,11 @@ export async function main(): Promise<void> {
   }
 
   // 3. Generate Report
-  const report = generateBenchmarkReport(allResults);
+  const report = generateBenchmarkReport(allResults, modelArg, thinkingArg, seed);
   printFormattedReportTable(report);
 
   // 4. Save Raw Results
-  Fs.writeFileSync(".benchmark-ab-results.json", JSON.stringify({ seed, report, raw: allResults }, null, 2), "utf8");
+  Fs.writeFileSync(".benchmark-ab-results.json", JSON.stringify({ seed, model: modelArg, thinking: thinkingArg, report, raw: allResults }, null, 2), "utf8");
   console.log("💾 Raw benchmark data and report saved to .benchmark-ab-results.json");
 }
 

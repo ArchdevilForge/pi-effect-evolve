@@ -4,7 +4,7 @@ def extract_fatal_cause(log_path, output_path):
     with open(log_path) as f:
         content = f.read()
     line_m = re.search(r'line (\d+)', content)
-    err_m = re.search(r'([A-Za-z_]+Error|[A-Za-z_]+Exception)', content)
+    err_m = re.search(r'([A-Za-z_]+(?:Error|Exception|Denied))', content)
     file_m = re.search(r'File "([^"]+)"', content)
     result = {
         'error': err_m.group(1) if err_m else 'UnknownError',
