@@ -1,6 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { diagnose, mutate, evaluate } from "../src/gepa.js";
+import * as Fs from "node:fs";
+import * as Path from "node:path";
+import * as Os from "node:os";
+import { diagnose, mutate, evaluate, autoHealFailure } from "../src/gepa.js";
+import { SkillMemory } from "../src/memory.js";
 import type { TraceGoal } from "../src/types.js";
 
 describe("GEPA-lite (Phase 4)", () => {
@@ -30,7 +34,6 @@ describe("GEPA-lite (Phase 4)", () => {
     const variants = mutate(diags[0]!, "print('hello')", "test-skill");
     assert.ok(variants.length >= 1);
     assert.ok(variants.length <= 3);
-    // at least one should have retry logic for timeout
     assert.ok(variants.some((v) => v.code.includes("retry")));
   });
 
@@ -38,11 +41,9 @@ describe("GEPA-lite (Phase 4)", () => {
     const diags = diagnose([failedGoal]);
     const variants = mutate(diags[0]!, "print('hello')", "test-skill");
     const evaluated = evaluate(variants, 15);
-    // all should have scores
     for (const v of evaluated) {
       assert.ok(typeof v.score === "number");
     }
-    // sorted by score descending
     for (let i = 1; i < evaluated.length; i++) {
       assert.ok((evaluated[i - 1]!.score ?? 0) >= (evaluated[i]!.score ?? 0));
     }
@@ -53,7 +54,6 @@ describe("GEPA-lite (Phase 4)", () => {
     const diags = diagnose([failedGoal]);
     const variants = mutate(diags[0]!, bigCode, "big-skill");
     const evaluated = evaluate(variants, 15);
-    // all should score 0 (over 15KB)
     for (const v of evaluated) {
       assert.equal(v.score, 0);
     }
@@ -84,7 +84,47 @@ describe("GEPA-lite (Phase 4)", () => {
     };
     const diags = diagnose([runtimeGoal]);
     const variants = mutate(diags[0]!, "x()", "rt-skill");
-    // should have validation variant
     assert.ok(variants.some((v) => v.code.includes("validate")));
+  });
+
+  it("autoHealFailure automatically mutates and updates a failing skill", () => {
+    const tmpDir = Fs.mkdtempSync(Path.join(Os.tmpdir(), "pi-gepa-heal-"));
+    try {
+      const mem = new SkillMemory(tmpDir);
+      const skillDir = Path.join(tmpDir, "api-fetch");
+      Fs.mkdirSync(skillDir, { recursive: true });
+      Fs.writeFileSync(Path.join(skillDir, "SKILL.md"), "# API Fetch", "utf8");
+      Fs.writeFileSync(Path.join(skillDir, "script.py"), "import requests\nresp = requests.get('https://api.example.com')", "utf8");
+      Fs.writeFileSync(Path.join(skillDir, "meta.json"), "{}", "utf8");
+
+      mem.register({
+        slug: "api-fetch",
+        title: "API Fetcher",
+        tags: ["api", "requests", "ETIMEDOUT"],
+        createdAt: new Date().toISOString(),
+        sizeBytes: 100,
+      });
+
+      const healGoal: TraceGoal = {
+        goalId: "heal-g1",
+        description: "fetch api data",
+        startTs: Date.now() - 10000,
+        outcome: "failure",
+        events: [
+          { id: "e1", goalId: "heal-g1", tool: "bash", input: { command: "python script.py" }, output: "ETIMEDOUT", isError: true, errorCategory: "timeout", errorDetail: "ETIMEDOUT", durationMs: 30000, ts: Date.now() },
+        ],
+      };
+
+      const healed = autoHealFailure(healGoal, mem, tmpDir, 15);
+      assert.ok(healed);
+      assert.equal(healed!.slug, "api-fetch");
+      assert.ok(healed!.score >= 30);
+
+      const updated = mem.readSkill("api-fetch");
+      assert.ok(updated);
+      assert.ok(updated!.code.includes("retry") || updated!.code.includes("with_retry"));
+    } finally {
+      Fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

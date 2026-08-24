@@ -1,7 +1,7 @@
 {
   "name": "@archdevil/pi-effect-evolve",
-  "version": "0.1.0",
-  "description": "Pi plugin distilling GenericAgent (real-browser+crystallize) & Hermes (GEPA trace-evolve) into a single Effect-managed extension. First-principles: minimal core + allowlist-gated evolution.",
+  "version": "0.2.0",
+  "description": "Zero-touch autonomous memory & self-evolution runtime for pi. Distills GenericAgent (crystallize) & Hermes (GEPA) into an Effect-managed harness with auto-recall, auto-crystallize, and auto-healing.",
   "type": "module",
   "license": "MIT",
   "author": "ArchdevilForge",

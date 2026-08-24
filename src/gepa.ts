@@ -1,6 +1,6 @@
 /**
  * pi-effect-evolve — GEPA-lite: diagnosis → mutation → evaluation → selection (Phase 4)
- * Offline trace-driven skill evolution (Hermes paper distilled)
+ * Autonomous trace-driven skill evolution and auto-healing
  */
 import * as NodeFs from "node:fs";
 import * as NodePath from "node:path";
@@ -105,10 +105,11 @@ export function evaluate(
       }
       score += Math.max(0, 20 - sizeKb); // smaller is better
 
-      // basic code quality heuristics
-      if (v.code.includes("try") && v.code.includes("catch")) score += 10;
-      if (v.code.includes("timeout") || v.code.includes("retry")) score += 5;
-      if (v.code.includes("validate") || v.code.includes("check")) score += 5;
+      // basic code quality heuristics (ignoring comments)
+      const codeBody = v.code.replace(/#.*$/gm, "").replace(/\/\/.*$/gm, "");
+      if (codeBody.includes("try") && (codeBody.includes("catch") || codeBody.includes("except"))) score += 10;
+      if (codeBody.includes("with_retry") || codeBody.includes("def retry") || codeBody.includes("time.sleep") || codeBody.includes("setTimeout")) score += 20;
+      if (codeBody.includes("validate") || codeBody.includes("assert") || codeBody.includes("is not None")) score += 10;
 
       v.score = score;
       return v;
@@ -147,6 +148,55 @@ export function gepaPipeline(
   return results;
 }
 
+/**
+ * Autonomous Zero-Touch Auto-Healing:
+ * Diagnoses failed goal, checks if a relevant skill exists, generates mutated fix,
+ * and if gate passes (>=30 score), updates the skill file directly.
+ */
+export function autoHealFailure(
+  failedGoal: TraceGoal,
+  memory: SkillMemory,
+  baseDir: string,
+  maxSizeKb = 15,
+): { slug: string; rationale: string; score: number } | undefined {
+  const diags = diagnose([failedGoal]);
+  if (diags.length === 0) return undefined;
+
+  const diag = diags[0]!;
+  // Find matching skill in memory by description or root cause
+  const promptMatches = memory.searchByPrompt(failedGoal.description + " " + diag.rootCause, 1);
+  const targetSkill = promptMatches.length > 0 ? promptMatches[0]! : memory.search(diag.rootCause, 1)[0];
+  if (!targetSkill) return undefined;
+  const existing = memory.readSkill(targetSkill.slug);
+  if (!existing) return undefined;
+
+  const variants = mutate(diag, existing.code, targetSkill.slug);
+  const evaluated = evaluate(variants, maxSizeKb);
+  const best = evaluated.find((v) => (v.score ?? 0) >= 30);
+
+  if (!best) return undefined;
+
+  // Apply fix directly to skill
+  const dir = NodePath.join(baseDir, targetSkill.slug);
+  try {
+    NodeFs.writeFileSync(NodePath.join(dir, "script.py"), best.code, "utf8");
+    const updatedMeta = {
+      ...existing.meta,
+      lastHealedAt: new Date().toISOString(),
+      lastHealRationale: best.rationale,
+      lastHealScore: best.score,
+    };
+    NodeFs.writeFileSync(NodePath.join(dir, "meta.json"), JSON.stringify(updatedMeta, null, 2), "utf8");
+    return {
+      slug: targetSkill.slug,
+      rationale: best.rationale,
+      score: best.score ?? 0,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 /** Queue GEPA results to disk for review */
 export function queueForReview(cwd: string, results: GepaResult[]): string {
   const dir = NodePath.join(cwd, "skills", "evolve", "_gepa_queue");
@@ -169,7 +219,6 @@ function suggestFix(pattern: string, detail: string): string {
 
 function addErrorHandling(code: string, diag: GepaDiagnosis): string {
   const header = `# GEPA variant: error handling for ${diag.failurePattern}\n# Root cause: ${diag.rootCause.slice(0, 200)}\n\n`;
-  // wrap main logic in try-except
   if (code.includes("def main")) {
     return header + code.replace(
       /def main\(([^)]*)\):/,

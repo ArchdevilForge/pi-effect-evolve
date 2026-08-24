@@ -1,12 +1,12 @@
 /**
- * pi-effect-evolve — GA (real-browser+crystallize) + Hermes (GEPA-lite) distilled into one pi extension
- * First principles: minimal core, allowlist-gated grey, Effect-managed IO, conservative evolve
+ * pi-effect-evolve — Zero-Touch Autonomous Memory & Self-Evolution Extension
  *
- * Phase 1: Write-Manage-Read closed loop (SkillMemory)
- * Phase 2: Structured trace (TraceStore)
- * Phase 3: Adaptive forgetting (SkillMemory.prune)
- * Phase 4: GEPA-lite pipeline (diagnose → mutate → evaluate → select)
- * Phase 5: Effect layers (AgentBrowser service, retry policies)
+ * First principles:
+ * - Zero-Touch Auto-Recall: Intent-matched skill retrieval & prompt injection on before_agent_start
+ * - Zero-Touch Auto-Crystallize: Background crystallization of successful workflows on agent_end
+ * - Zero-Touch Implicit Feedback: Automatic usage & quality tracking per turn
+ * - Zero-Touch Auto-Healing: Background GEPA mutation & patch application on repeated failures
+ * - Effect-managed IO kernel: Typed errors, retries, Layer DI, and abort awareness
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -18,7 +18,7 @@ import * as NodeChild from "node:child_process";
 import { GateError, FsError } from "./types.js";
 import { TraceStore } from "./trace.js";
 import { SkillMemory } from "./memory.js";
-import { gepaPipeline, queueForReview } from "./gepa.js";
+import { gepaPipeline, queueForReview, autoHealFailure } from "./gepa.js";
 import { AgentBrowser, AgentBrowserLive, browserExecute, browserExecuteWithRetry } from "./layers.js";
 
 // --- env (de-sens, allowlist) ---
@@ -34,10 +34,12 @@ function allowNetwork(): boolean {
   return env("PI_EFFECT_ALLOW_NETWORK", "1") === "1";
 }
 function requireConfirm(): boolean {
-  return env("PI_EFFECT_REQUIRE_CONFIRM", "1") !== "0";
+  return env("PI_EFFECT_REQUIRE_CONFIRM", "0") === "1";
 }
-function evolveMode(): string {
-  return env("PI_EFFECT_EVOLVE_MODE", "conservative") ?? "conservative";
+function evolveMode(): "auto" | "conservative" | "gepa" {
+  const m = env("PI_EFFECT_EVOLVE_MODE", "auto");
+  if (m === "conservative" || m === "gepa") return m;
+  return "auto";
 }
 function skillMaxKb(): number {
   return Number(env("PI_EFFECT_SKILL_MAX_KB", "15") ?? 15);
@@ -72,10 +74,14 @@ function appendAudit(cwd: string, entry: Record<string, unknown>) {
 export default function (pi: ExtensionAPI) {
   const TRACE_KEY = "pi-effect-evolve:trace";
 
-  // Phase 2: structured trace store
+  // Structured trace store
   const trace = new TraceStore();
 
-  // Phase 1+3: skill memory (initialized lazily per cwd)
+  // Active skills retrieved for the current turn
+  let currentActiveSkills: string[] = [];
+  let currentPromptText = "";
+
+  // Skill memory (initialized lazily per cwd)
   let memory: SkillMemory | undefined;
   function getMemory(cwd: string): SkillMemory {
     if (!memory) {
@@ -84,7 +90,7 @@ export default function (pi: ExtensionAPI) {
     return memory;
   }
 
-  // Phase 2: capture structured trace from tool results
+  // --- 1. Trace Capture from Tool Results ---
   pi.on("tool_result", async (event, _ctx) => {
     const startTs = Date.now();
     const errorCategory = event.isError
@@ -105,16 +111,15 @@ export default function (pi: ExtensionAPI) {
       errorDetail,
       durationMs: Date.now() - startTs,
     });
-    // persist trace for branch survival
+    // persist trace summary
     pi.appendEntry(TRACE_KEY, { at: Date.now(), summary: trace.summary(3) });
   });
 
-  // Phase 2: start goal on user input (turn_start)
+  // --- 2. Turn Start / Input ---
   pi.on("turn_start", async (_event, _ctx) => {
-    trace.startGoal("user-turn");
+    trace.startGoal(currentPromptText || "user-task");
   });
 
-  // Phase 2: end goal on turn end
   pi.on("turn_end", async (_event, _ctx) => {
     const goal = trace.activeGoal();
     if (goal) {
@@ -123,34 +128,109 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  // Restore trace + prune on session start
+  // --- 3. Zero-Touch Auto-Recall & Prompt Injection (before_agent_start) ---
+  pi.on("before_agent_start", async (event, ctx) => {
+    currentPromptText = event.prompt;
+    const mem = getMemory(ctx.cwd);
+
+    // Intent-matched search for relevant skills
+    const matches = mem.searchByPrompt(event.prompt, 2);
+    currentActiveSkills = matches.map((m) => m.slug);
+
+    let injection = "";
+    if (matches.length > 0) {
+      const skillBlocks = matches
+        .map(
+          (m) =>
+            `### Skill: ${m.slug} (${m.title}) [Tags: ${m.tags.join(", ")}]\n${
+              m.code ? "```python\n" + m.code + "\n```" : m.skillMd ?? ""
+            }`,
+        )
+        .join("\n\n");
+
+      injection = `[Autonomous Memory: Loaded ${matches.length} matching crystallized skill(s)]\n${skillBlocks}\nGuidance: Prioritize reusing and adapting the verified logic above to solve the user's request.`;
+    } else {
+      // Fallback: general summary
+      const summary = mem.contextSummary();
+      const traceSummary = trace.summary(2);
+      injection = [summary, traceSummary].filter(Boolean).join("\n\n");
+    }
+
+    if (injection) {
+      return { systemPrompt: event.systemPrompt + "\n\n" + injection };
+    }
+  });
+
+  // --- 4. Zero-Touch Autonomous Crystallization, Feedback & Auto-Healing (agent_end) ---
+  pi.on("agent_end", async (_event, ctx) => {
+    const mem = getMemory(ctx.cwd);
+    const goal = trace.activeGoal();
+    const mode = evolveMode();
+
+    if (!goal) return;
+
+    const hasErrors = goal.events.some((e) => e.isError);
+
+    // A. Implicit Quality Feedback
+    if (currentActiveSkills.length > 0) {
+      for (const slug of currentActiveSkills) {
+        mem.recordUsage(slug, !hasErrors);
+      }
+      appendAudit(ctx.cwd, {
+        event: "implicit_feedback",
+        skills: currentActiveSkills,
+        success: !hasErrors,
+      });
+    }
+
+    // B. Autonomous Background Crystallization (in auto mode)
+    if (mode === "auto" && !hasErrors && currentActiveSkills.length === 0) {
+      const crystallized = mem.autoCrystallizeGoal(goal, skillMaxKb());
+      if (crystallized) {
+        appendAudit(ctx.cwd, {
+          event: "auto_crystallize",
+          slug: crystallized.slug,
+          title: crystallized.title,
+        });
+        pi.appendEntry("evolve-auto", { slug: crystallized.slug, at: Date.now() });
+      }
+    }
+
+    // C. Autonomous Background Auto-Healing (on error in auto/gepa mode)
+    if ((mode === "auto" || mode === "gepa") && hasErrors) {
+      const healed = autoHealFailure(
+        goal,
+        mem,
+        NodePath.resolve(ctx.cwd, "skills/evolve"),
+        skillMaxKb(),
+      );
+      if (healed) {
+        appendAudit(ctx.cwd, {
+          event: "auto_heal",
+          slug: healed.slug,
+          rationale: healed.rationale,
+          score: healed.score,
+        });
+        pi.appendEntry("evolve-heal", { slug: healed.slug, at: Date.now() });
+      }
+    }
+  });
+
+  // --- 5. Session Lifecycle ---
   pi.on("session_start", async (_e, ctx) => {
     trace.restore(ctx.cwd);
     const mem = getMemory(ctx.cwd);
-    // Phase 3: adaptive forgetting — prune stale skills on session start
     const { deprecated, archived } = mem.prune();
     if (deprecated.length > 0 || archived.length > 0) {
       appendAudit(ctx.cwd, { event: "prune", deprecated, archived });
     }
   });
 
-  // Phase 1 (Read): inject skill context into system prompt
-  pi.on("before_agent_start", async (event, ctx) => {
-    const mem = getMemory(ctx.cwd);
-    const summary = mem.contextSummary();
-    const traceSummary = trace.summary(3);
-    const extra = [summary, traceSummary].filter(Boolean).join("\n\n");
-    if (extra) {
-      return { systemPrompt: event.systemPrompt + "\n\n" + extra };
-    }
-  });
-
-  // Persist trace on shutdown
   pi.on("session_shutdown", async (_e, ctx) => {
     trace.persist(ctx.cwd);
   });
 
-  // --- grey gate for any networked tool: block before LLM abuse ---
+  // --- 6. Tool Gate ---
   pi.on("tool_call", async (event, _ctx) => {
     if (event.toolName === "web_real" || event.toolName === "web_scan_real") {
       if (!allowNetwork()) {
@@ -164,13 +244,12 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  // --- tools ---
+  // --- 7. Interactive / Explicit Tools (available for manual inspection if desired) ---
 
-  // Phase 5: web_real with Effect Layer + retry
   pi.registerTool({
     name: "web_real",
     label: "Web Real",
-    description: "Execute JS in real persistent Chrome via agent-browser-cli (GA TMWebdriver). Gated by PI_EFFECT_ALLOW_HOSTS/ALLOW_NETWORK. Fallback to error if bridge missing.",
+    description: "Execute JS in real persistent Chrome via agent-browser-cli. Full network access enabled by default.",
     parameters: Type.Object({
       code: Type.String({ description: "JS code to execute in page context, return value is captured" }),
       url: Type.Optional(Type.String({ description: "Optional URL hint for allowlist check" })),
@@ -184,7 +263,6 @@ export default function (pi: ExtensionAPI) {
       }
       appendAudit(ctx.cwd, { tool: "web_real", url: params.url, codeLen: params.code.length });
 
-      // Phase 5: Effect-managed execution with Layer DI + retry
       const prog = browserExecuteWithRetry(params.code, signal ?? undefined).pipe(
         Effect.provide(AgentBrowserLive),
         Effect.timeout("30 seconds"),
@@ -200,8 +278,8 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "web_scan_real",
     label: "Web Scan Real",
-    description: "Scan real browser DOM (GA web_scan distilled). Gated same as web_real.",
-    parameters: Type.Object({ url: Type.String({ description: "URL to scan (must be allowlisted)" }) }),
+    description: "Scan real browser DOM (GA web_scan distilled).",
+    parameters: Type.Object({ url: Type.String({ description: "URL to scan" }) }),
     async execute(_id, params, signal, _onUpdate, ctx) {
       if (!allowNetwork() || !isHostAllowed(params.url)) {
         return { content: [{ type: "text", text: "BLOCKED: allowlist gate" }], isError: true, details: { allowHosts: allowHosts() } };
@@ -209,7 +287,6 @@ export default function (pi: ExtensionAPI) {
       appendAudit(ctx.cwd, { tool: "web_scan_real", url: params.url });
       const code = `(()=>{return {url:location.href,title:document.title,html:document.documentElement.outerHTML.slice(0,20000)}})()`;
 
-      // Phase 5: Effect-managed execution
       const prog = browserExecute(code, signal ?? undefined).pipe(
         Effect.provide(AgentBrowserLive),
         Effect.timeout("30 seconds"),
@@ -224,11 +301,10 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // Phase 2: structured trace tool (replaces old evolve_trace)
   pi.registerTool({
     name: "evolve_trace",
     label: "Evolve Trace",
-    description: "Capture recent structured trace for Hermes GEPA-lite offline mutate. Shows goal-aware, causal trace with error categories. Read-only, no gate.",
+    description: "Inspect recent structured traces. Read-only.",
     parameters: Type.Object({
       limit: Type.Optional(Type.Number({ description: "last N events" })),
       goalId: Type.Optional(Type.String({ description: "specific goal ID to inspect" })),
@@ -245,20 +321,18 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // Phase 1+2+3+5: crystallize with full memory integration
   pi.registerTool({
     name: "evolve_crystallize",
     label: "Evolve Crystallize",
-    description: "Conservative crystallize: write reusable Skill to skills/evolve/<slug>/ after human confirm + gates (≤15KB, tests). Registers in skill index for future retrieval. Mirrors GA L3 + Hermes size gate.",
+    description: "Manually crystallize reusable Skill to skills/evolve/<slug>/.",
     parameters: Type.Object({
       slug: Type.String({ description: "kebab slug, e.g. example-sign" }),
       title: Type.Optional(Type.String()),
       code: Type.String({ description: "reusable script/code to persist" }),
       tags: Type.Optional(Type.Array(Type.String(), { description: "searchable tags for skill retrieval" })),
-      verify: Type.Optional(Type.String({ description: "verify command, e.g. 'python verify.py'" })),
+      verify: Type.Optional(Type.String({ description: "verify command" })),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
-      // conservative gate
       if (requireConfirm()) {
         const ok = await ctx.ui.confirm("Crystallize?", `Write skills/evolve/${params.slug}/ ? ${params.code.length} chars, max ${skillMaxKb()}KB`);
         if (!ok) return { content: [{ type: "text", text: "cancelled by human" }], details: {}, isError: true };
@@ -271,13 +345,11 @@ export default function (pi: ExtensionAPI) {
         const dir = NodePath.resolve(ctx.cwd, "skills/evolve", params.slug);
         yield* Effect.try({ try: () => NodeFs.mkdirSync(dir, { recursive: true }), catch: (e) => new FsError(e) });
 
-        // Phase 2: include structured trace in skill metadata
         const recentTrace = trace.summary(5);
         const skillMd = `---\nname: ${params.slug}\ntitle: ${params.title ?? params.slug}\ntags: [${(params.tags ?? []).join(", ")}]\n---\n\n# ${params.title ?? params.slug}\n\nSource trace:\n${recentTrace}\n\nVerify: \`${params.verify ?? "manual"}\`\n\nSee \`script.py\`.\n`;
         yield* Effect.try({ try: () => NodeFs.writeFileSync(NodePath.join(dir, "SKILL.md"), skillMd, "utf8"), catch: (e) => new FsError(e) });
         yield* Effect.try({ try: () => NodeFs.writeFileSync(NodePath.join(dir, "script.py"), params.code, "utf8"), catch: (e) => new FsError(e) });
         yield* Effect.try({ try: () => NodeFs.writeFileSync(NodePath.join(dir, "meta.json"), JSON.stringify({ slug: params.slug, tags: params.tags ?? [], allowHosts: allowHosts(), mode: evolveMode(), at: new Date().toISOString() }, null, 2), "utf8"), catch: (e) => new FsError(e) });
-        // Hermes gate: if tests/ exists, run pytest -q
         if (NodeFs.existsSync(NodePath.resolve(ctx.cwd, "tests")) || NodeFs.existsSync(NodePath.resolve(ctx.cwd, "test"))) {
           try {
             NodeChild.execSync("pytest -q", { stdio: "pipe", timeout: 30000 });
@@ -295,7 +367,6 @@ export default function (pi: ExtensionAPI) {
         return { content: [{ type: "text", text: res }], details: {}, isError: true };
       }
 
-      // Phase 1: register in skill index for retrieval
       const mem = getMemory(ctx.cwd);
       mem.register({
         slug: params.slug,
@@ -311,14 +382,13 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // Phase 1: skill search tool
   pi.registerTool({
     name: "evolve_search",
     label: "Evolve Search",
-    description: "Search crystallized skills by keyword. Returns matching skills ranked by relevance + quality signals (success rate, recency, frequency).",
+    description: "Search crystallized skills by keyword.",
     parameters: Type.Object({
-      query: Type.String({ description: "search query (matches slug, title, tags)" }),
-      limit: Type.Optional(Type.Number({ description: "max results (default 5)" })),
+      query: Type.String({ description: "search query" }),
+      limit: Type.Optional(Type.Number({ description: "max results" })),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const mem = getMemory(ctx.cwd);
@@ -334,13 +404,12 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // Phase 1: record skill usage
   pi.registerTool({
     name: "evolve_feedback",
     label: "Evolve Feedback",
-    description: "Record success/failure feedback for a crystallized skill. Feeds adaptive forgetting: low-success skills get deprecated over time.",
+    description: "Record success/failure feedback for a crystallized skill.",
     parameters: Type.Object({
-      slug: Type.String({ description: "skill slug to report on" }),
+      slug: Type.String({ description: "skill slug" }),
       success: Type.Boolean({ description: "true if skill worked, false if it failed" }),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
@@ -351,20 +420,14 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // Phase 4: GEPA evolve tool
   pi.registerTool({
     name: "evolve_gepa",
     label: "Evolve GEPA",
-    description: "Run GEPA-lite pipeline: diagnose failed traces → generate skill variants → evaluate → select best. Requires PI_EFFECT_EVOLVE_MODE=gepa or auto. Results queued for review.",
+    description: "Run GEPA-lite failure diagnosis and variant mutation.",
     parameters: Type.Object({
-      autoApply: Type.Optional(Type.Boolean({ description: "auto-apply best variant (default false, queue for review)" })),
+      autoApply: Type.Optional(Type.Boolean({ description: "auto-apply best variant" })),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
-      const mode = evolveMode();
-      if (mode === "conservative") {
-        return { content: [{ type: "text", text: "BLOCKED: PI_EFFECT_EVOLVE_MODE=conservative — set to 'auto' or 'gepa' to enable" }], details: {}, isError: true };
-      }
-
       const failedGoals = trace.getFailedGoals();
       if (failedGoals.length === 0) {
         return { content: [{ type: "text", text: "No failed goals in trace — nothing to evolve" }], details: {} };
@@ -377,10 +440,7 @@ export default function (pi: ExtensionAPI) {
         return { content: [{ type: "text", text: "GEPA: no actionable diagnoses found" }], details: {} };
       }
 
-      // queue for review (safe default)
       const queueFile = queueForReview(ctx.cwd, results);
-
-      // auto-apply if requested and gates pass
       const applied: string[] = [];
       if (params.autoApply) {
         for (const r of results) {
@@ -408,7 +468,6 @@ export default function (pi: ExtensionAPI) {
       }
 
       appendAudit(ctx.cwd, { tool: "evolve_gepa", diagnoses: results.length, applied: applied.length, queueFile });
-
       const summary = results.map((r) =>
         `• ${r.diagnosis.failurePattern}: ${r.diagnosis.rootCause.slice(0, 80)}${r.selected ? ` → ${r.selected.slug} (score=${r.selected.score})` : " (no variant passed)"}`
       ).join("\n");
@@ -420,8 +479,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // --- commands ---
-
+  // --- 8. Commands ---
   pi.registerCommand("evolve-status", {
     description: "Show evolve mode / allowlist / skill stats / audit tail",
     handler: async (_args, ctx) => {
