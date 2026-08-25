@@ -102,7 +102,12 @@ npm run extreme-benchmark
 
 # Measure extension, recipe, and deferred-tool schema tax
 npm run benchmark:schema-tax
+
+# Run the frozen 12-family expansion candidate (288 held-out + 36 train runs)
+npm run benchmark:ab
 ```
+
+The expansion benchmark keeps the task catalog fixed during a run. Primary evaluation is paired verifier outcome (`D Learned >= A Bare`) with an exact McNemar diagnostic. Efficiency is reported on the same-task/repeat pairs where both agents pass; results are also split by family and task class. Learning coverage uses unique `family × repeat` train stages, while recall and useful recall use held-out runs.
 
 ---
 

@@ -1,0 +1,12 @@
+{
+  "slug": "gold-api-migrator",
+  "title": "Client API Method Migration",
+  "tags": [
+    "api",
+    "migration",
+    "client",
+    "refactor"
+  ],
+  "version": 1,
+  "verified": true
+}

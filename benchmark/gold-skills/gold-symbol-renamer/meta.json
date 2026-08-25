@@ -1,0 +1,12 @@
+{
+  "slug": "gold-symbol-renamer",
+  "title": "Python Symbol Rename and Caller Update",
+  "tags": [
+    "refactor",
+    "rename",
+    "symbol",
+    "caller"
+  ],
+  "version": 1,
+  "verified": true
+}

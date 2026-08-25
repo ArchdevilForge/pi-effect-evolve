@@ -3,6 +3,7 @@
  */
 import * as Fs from "node:fs";
 import * as Path from "node:path";
+import { setupExtendedBenchmarkFixtures } from "./extended-fixtures.js";
 
 export function setupBenchmarkFixtures(rootDir = process.cwd()): void {
   const fixturesBase = Path.join(rootDir, "benchmark", "fixtures");
@@ -310,4 +311,6 @@ except Exception as e:
       "utf8"
     );
   }
+
+  setupExtendedBenchmarkFixtures(rootDir);
 }

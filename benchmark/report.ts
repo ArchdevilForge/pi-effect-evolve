@@ -8,6 +8,9 @@ import type {
   BenchmarkReportSummary,
   LearningCoverageReport,
   FamilyBreakdownRow,
+  PairedMetricSummary,
+  PairedOutcomeReport,
+  TaskClassBreakdownRow,
 } from "./types.js";
 
 function median(nums: number[]): number {
@@ -20,6 +23,82 @@ function median(nums: number[]): number {
 function mean(nums: number[]): number {
   if (nums.length === 0) return 0;
   return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+type PairedRun = { baseline: AgentRunResult; treatment: AgentRunResult };
+
+function pairRuns(baselineRuns: AgentRunResult[], treatmentRuns: AgentRunResult[]): PairedRun[] {
+  const baselineByKey = new Map(baselineRuns.map((run) => [`${run.taskId}|${run.repeatIndex}`, run]));
+  return treatmentRuns.flatMap((treatment) => {
+    const baseline = baselineByKey.get(`${treatment.taskId}|${treatment.repeatIndex}`);
+    return baseline ? [{ baseline, treatment }] : [];
+  });
+}
+
+function pairedMetricSummary(pairs: PairedRun[], metric: (run: AgentRunResult) => number): PairedMetricSummary {
+  if (pairs.length === 0) {
+    return {
+      baselineMedian: null,
+      treatmentMedian: null,
+      medianDelta: null,
+      medianDeltaPct: null,
+      treatmentLowerCount: 0,
+      equalCount: 0,
+      treatmentHigherCount: 0,
+    };
+  }
+
+  const baseline = pairs.map((pair) => metric(pair.baseline));
+  const treatment = pairs.map((pair) => metric(pair.treatment));
+  const deltas = pairs.map((pair) => metric(pair.treatment) - metric(pair.baseline));
+  const baselineMedian = median(baseline);
+  const medianDelta = median(deltas);
+
+  return {
+    baselineMedian,
+    treatmentMedian: median(treatment),
+    medianDelta,
+    medianDeltaPct: baselineMedian > 0 ? (medianDelta / baselineMedian) * 100 : null,
+    treatmentLowerCount: deltas.filter((delta) => delta < 0).length,
+    equalCount: deltas.filter((delta) => delta === 0).length,
+    treatmentHigherCount: deltas.filter((delta) => delta > 0).length,
+  };
+}
+
+function exactMcNemarPValue(baselineOnlyPassPairs: number, treatmentOnlyPassPairs: number): number {
+  const discordant = baselineOnlyPassPairs + treatmentOnlyPassPairs;
+  if (discordant === 0) return 1;
+
+  const smaller = Math.min(baselineOnlyPassPairs, treatmentOnlyPassPairs);
+  let coefficient = 1;
+  let cumulative = 1;
+  for (let k = 1; k <= smaller; k++) {
+    coefficient *= (discordant - k + 1) / k;
+    cumulative += coefficient;
+  }
+
+  return Math.min(1, 2 * cumulative / (2 ** discordant));
+}
+
+function pairedOutcomeReport(baselineRuns: AgentRunResult[], treatmentRuns: AgentRunResult[]): PairedOutcomeReport {
+  const pairs = pairRuns(baselineRuns, treatmentRuns);
+  const bothPass = pairs.filter(({ baseline, treatment }) => baseline.passed && treatment.passed);
+  const baselineOnlyPassPairs = pairs.filter(({ baseline, treatment }) => baseline.passed && !treatment.passed).length;
+  const treatmentOnlyPassPairs = pairs.filter(({ baseline, treatment }) => !baseline.passed && treatment.passed).length;
+
+  return {
+    totalPairs: pairs.length,
+    bothPassPairs: bothPass.length,
+    baselineOnlyPassPairs,
+    treatmentOnlyPassPairs,
+    bothFailPairs: pairs.filter(({ baseline, treatment }) => !baseline.passed && !treatment.passed).length,
+    mcnemarExactPValue: exactMcNemarPValue(baselineOnlyPassPairs, treatmentOnlyPassPairs),
+    bothPass: {
+      totalTokens: pairedMetricSummary(bothPass, (run) => run.usage.totalTokens),
+      toolCalls: pairedMetricSummary(bothPass, (run) => run.toolCalls),
+      wallTimeMs: pairedMetricSummary(bothPass, (run) => run.wallTimeMs),
+    },
+  };
 }
 
 /** PRNG for reproducible bootstrap sampling */
@@ -169,19 +248,25 @@ export function generateBenchmarkReport(
   let learningCoverage: LearningCoverageReport | undefined = undefined;
   const dRuns = groups["D_learned"] ?? [];
   if (dRuns.length > 0) {
-    const withTrain = dRuns.filter((r) => r.trainPassed !== undefined);
-    const trainPassCount = withTrain.filter((r) => r.trainPassed === true).length;
-    const crystallizeCount = withTrain.filter((r) => (r.trainCrystallizedCount ?? 0) > 0).length;
-    const recallCount = withTrain.filter((r) => r.heldoutRecalledLearnedSkill === true || r.recalledSkills.length > 0).length;
-    const usefulRecallCount = withTrain.filter(
+    const trainStages = Array.from(
+      new Map(
+        dRuns
+          .filter((r) => r.trainPassed !== undefined)
+          .map((r) => [r.trainRunKey ?? `${r.taskId}|${r.repeatIndex}`, r]),
+      ).values(),
+    );
+    const trainPassCount = trainStages.filter((r) => r.trainPassed === true).length;
+    const crystallizeCount = trainStages.filter((r) => (r.trainCrystallizedCount ?? 0) > 0).length;
+    const recallCount = dRuns.filter((r) => r.heldoutRecalledLearnedSkill === true || r.recalledSkills.length > 0).length;
+    const usefulRecallCount = dRuns.filter(
       (r) => (r.heldoutRecalledLearnedSkill === true || r.recalledSkills.length > 0) && r.passed === true,
     ).length;
-    const trainCosts = withTrain.map((r) => r.trainCost ?? 0);
+    const trainCosts = trainStages.map((r) => r.trainCost ?? 0);
     const medTrainCost = median(trainCosts);
-    const medTrainTotalTokens = median(withTrain.map((r) => r.trainTotalTokens ?? r.trainInputTokens ?? 0));
-    const medTrainToolCalls = median(withTrain.map((r) => r.trainToolCalls ?? 0));
-    const medTrainWallTimeMs = median(withTrain.map((r) => r.trainWallTimeMs ?? 0));
-    const reusableRuns = withTrain.filter((r) => (r.trainCrystallizedCount ?? 0) > 0);
+    const medTrainTotalTokens = median(trainStages.map((r) => r.trainTotalTokens ?? r.trainInputTokens ?? 0));
+    const medTrainToolCalls = median(trainStages.map((r) => r.trainToolCalls ?? 0));
+    const medTrainWallTimeMs = median(trainStages.map((r) => r.trainWallTimeMs ?? 0));
+    const reusableRuns = dRuns.filter((r) => (r.trainCrystallizedCount ?? 0) > 0);
     const heldoutSavings = reusableRuns.flatMap((r) => {
       const bare = bareRuns.find((b) => b.taskId === r.taskId && b.repeatIndex === r.repeatIndex);
       return bare ? [bare.usage.totalTokens - r.usage.totalTokens] : [];
@@ -195,15 +280,16 @@ export function generateBenchmarkReport(
       : undefined;
 
     learningCoverage = {
-      trainTotal: withTrain.length,
+      trainTotal: trainStages.length,
       trainPassCount,
-      trainPassRatePct: withTrain.length > 0 ? (trainPassCount / withTrain.length) * 100 : 0,
+      trainPassRatePct: trainStages.length > 0 ? (trainPassCount / trainStages.length) * 100 : 0,
       crystallizeCount,
-      crystallizeRatePct: withTrain.length > 0 ? (crystallizeCount / withTrain.length) * 100 : 0,
+      crystallizeRatePct: trainStages.length > 0 ? (crystallizeCount / trainStages.length) * 100 : 0,
+      heldoutTotal: dRuns.length,
       heldoutRecallCount: recallCount,
-      heldoutRecallRatePct: withTrain.length > 0 ? (recallCount / withTrain.length) * 100 : 0,
+      heldoutRecallRatePct: dRuns.length > 0 ? (recallCount / dRuns.length) * 100 : 0,
       usefulRecallCount,
-      usefulRecallRatePct: withTrain.length > 0 ? (usefulRecallCount / withTrain.length) * 100 : 0,
+      usefulRecallRatePct: dRuns.length > 0 ? (usefulRecallCount / dRuns.length) * 100 : 0,
       medianTrainCost: medTrainCost,
       medianTrainTotalTokens: medTrainTotalTokens,
       medianTrainToolCalls: medTrainToolCalls,
@@ -221,6 +307,7 @@ export function generateBenchmarkReport(
   for (const f of families) {
     const fBare = bareRuns.filter((r) => r.family === f);
     const fLearned = dRuns.filter((r) => r.family === f);
+    const fBothPass = pairRuns(fBare, fLearned).filter(({ baseline, treatment }) => baseline.passed && treatment.passed);
 
     const barePass = fBare.length > 0 ? (fBare.filter((r) => r.passed).length / fBare.length) * 100 : 0;
     const learnedPass = fLearned.length > 0 ? (fLearned.filter((r) => r.passed).length / fLearned.length) * 100 : 0;
@@ -242,6 +329,7 @@ export function generateBenchmarkReport(
 
     familyBreakdown.push({
       family: f,
+      taskClass: fBare[0]?.taskClass ?? fLearned[0]?.taskClass ?? "unknown",
       barePassRatePct: barePass,
       learnedPassRatePct: learnedPass,
       bareMedianTools: bareTools,
@@ -255,8 +343,33 @@ export function generateBenchmarkReport(
       timeDeltaPct: timeDelta,
       learnedRecallRatePct: fLearned.length > 0 ? (recallCount / fLearned.length) * 100 : 0,
       usefulRecallRatePct: fLearned.length > 0 ? (usefulCount / fLearned.length) * 100 : 0,
+      pairedSuccessCount: fBothPass.length,
+      pairedMedianToolDelta: pairedMetricSummary(fBothPass, (r) => r.toolCalls).medianDelta,
+      pairedMedianTokenDelta: pairedMetricSummary(fBothPass, (r) => r.usage.totalTokens).medianDelta,
     });
   }
+
+  const taskClasses = Array.from(new Set(results.map((r) => r.taskClass ?? "unknown")));
+  const taskClassBreakdown: TaskClassBreakdownRow[] = taskClasses.map((taskClass) => {
+    const classBare = bareRuns.filter((r) => (r.taskClass ?? "unknown") === taskClass);
+    const classLearned = dRuns.filter((r) => (r.taskClass ?? "unknown") === taskClass);
+    const classBothPass = pairRuns(classBare, classLearned).filter(({ baseline, treatment }) => baseline.passed && treatment.passed);
+    const classFamilies = new Set([...classBare, ...classLearned].map((r) => r.family));
+
+    return {
+      taskClass,
+      familyCount: classFamilies.size,
+      barePassRatePct: classBare.length > 0 ? (classBare.filter((r) => r.passed).length / classBare.length) * 100 : 0,
+      learnedPassRatePct: classLearned.length > 0 ? (classLearned.filter((r) => r.passed).length / classLearned.length) * 100 : 0,
+      bareMedianTools: median(classBare.map((r) => r.toolCalls)),
+      learnedMedianTools: median(classLearned.map((r) => r.toolCalls)),
+      bareMedianTotalTokens: median(classBare.map((r) => r.usage.totalTokens)),
+      learnedMedianTotalTokens: median(classLearned.map((r) => r.usage.totalTokens)),
+      pairedSuccessCount: classBothPass.length,
+      pairedMedianToolDelta: pairedMetricSummary(classBothPass, (r) => r.toolCalls).medianDelta,
+      pairedMedianTokenDelta: pairedMetricSummary(classBothPass, (r) => r.usage.totalTokens).medianDelta,
+    };
+  });
 
   return {
     timestamp: new Date().toISOString(),
@@ -266,6 +379,8 @@ export function generateBenchmarkReport(
     groups: groupStats,
     learningCoverage,
     familyBreakdown,
+    taskClassBreakdown,
+    pairedOutcome: pairedOutcomeReport(bareRuns, dRuns),
     bootstrapConfidenceIntervals: ciMap,
     metadata: {
       seed,
@@ -332,32 +447,72 @@ export function printFormattedReportTable(summary: BenchmarkReportSummary): void
     console.log("\n📋 [Task Family Breakdown: Bare Pi vs Evolve Learned]");
     console.log(
       "Family".padEnd(18) +
+      "Class".padEnd(24) +
       "Bare Pass".padEnd(12) +
       "D Pass".padEnd(10) +
       "Bare Tools".padEnd(13) +
       "D Tools".padEnd(10) +
       "Δ Tools".padEnd(12) +
       "Δ Total Toks".padEnd(15) +
-      "Useful Recall"
+      "Paired ΔT/ΔTok"
     );
-    console.log("-".repeat(105));
+    console.log("-".repeat(135));
 
     for (const f of summary.familyBreakdown) {
       const toolsDeltaStr = `${f.toolsDeltaPct >= 0 ? "+" : ""}${f.toolsDeltaPct.toFixed(1)}%`;
       const tokDeltaStr = `${f.totalTokensDeltaPct >= 0 ? "+" : ""}${f.totalTokensDeltaPct.toFixed(1)}%`;
-      const usefulStr = `${f.usefulRecallRatePct.toFixed(0)}%`;
+      const pairedStr = f.pairedSuccessCount > 0
+        ? `${(f.pairedMedianToolDelta ?? 0) >= 0 ? "+" : ""}${f.pairedMedianToolDelta?.toFixed(1) ?? "—"}/${f.pairedMedianTokenDelta?.toFixed(0) ?? "—"}`
+        : "—";
 
       console.log(
         f.family.padEnd(18) +
+        f.taskClass.padEnd(24) +
         `${f.barePassRatePct.toFixed(0)}%`.padEnd(12) +
         `${f.learnedPassRatePct.toFixed(0)}%`.padEnd(10) +
         `${f.bareMedianTools.toFixed(1)}`.padEnd(13) +
         `${f.learnedMedianTools.toFixed(1)}`.padEnd(10) +
         toolsDeltaStr.padEnd(12) +
         tokDeltaStr.padEnd(15) +
-        usefulStr
+        `${f.pairedSuccessCount} ${pairedStr}`
       );
     }
+  }
+
+  if (summary.taskClassBreakdown && summary.taskClassBreakdown.length > 0) {
+    console.log("\n📚 [Task-Class Breakdown]");
+    console.log("Class".padEnd(26) + "Families".padEnd(10) + "A Pass".padEnd(10) + "D Pass".padEnd(10) + "A Tools".padEnd(10) + "D Tools".padEnd(10) + "Paired n".padEnd(10) + "Paired ΔTools/ΔTokens");
+    console.log("-".repeat(120));
+    for (const row of summary.taskClassBreakdown) {
+      const paired = row.pairedSuccessCount > 0
+        ? `${(row.pairedMedianToolDelta ?? 0) >= 0 ? "+" : ""}${row.pairedMedianToolDelta?.toFixed(1) ?? "—"}/${row.pairedMedianTokenDelta?.toFixed(0) ?? "—"}`
+        : "—";
+      console.log(
+        row.taskClass.padEnd(26) +
+        `${row.familyCount}`.padEnd(10) +
+        `${row.barePassRatePct.toFixed(1)}%`.padEnd(10) +
+        `${row.learnedPassRatePct.toFixed(1)}%`.padEnd(10) +
+        `${row.bareMedianTools.toFixed(1)}`.padEnd(10) +
+        `${row.learnedMedianTools.toFixed(1)}`.padEnd(10) +
+        `${row.pairedSuccessCount}`.padEnd(10) +
+        paired,
+      );
+    }
+  }
+
+  if (summary.pairedOutcome) {
+    const paired = summary.pairedOutcome;
+    const bothPass = paired.bothPass;
+    const formatMetric = (metric: PairedMetricSummary, divisor = 1) => {
+      if (metric.baselineMedian === null || metric.treatmentMedian === null || metric.medianDelta === null) return "n/a";
+      return `${(metric.baselineMedian / divisor).toFixed(divisor === 1000 ? 1 : 0)} → ${(metric.treatmentMedian / divisor).toFixed(divisor === 1000 ? 1 : 0)} (Δ ${metric.medianDelta >= 0 ? "+" : ""}${(metric.medianDelta / divisor).toFixed(divisor === 1000 ? 1 : 0)})`;
+    };
+    console.log("\n🔗 [Paired Outcomes: A Bare vs D Learned]");
+    console.log(`   • Pairs: ${paired.totalPairs} | Both PASS: ${paired.bothPassPairs} | A-only: ${paired.baselineOnlyPassPairs} | D-only: ${paired.treatmentOnlyPassPairs} | Both fail: ${paired.bothFailPairs}`);
+    console.log(`   • McNemar exact p-value: ${paired.mcnemarExactPValue.toFixed(3)}`);
+    console.log(`   • Both-PASS tokens: ${formatMetric(bothPass.totalTokens)}`);
+    console.log(`   • Both-PASS tools: ${formatMetric(bothPass.toolCalls)} | lower/equal/higher: ${bothPass.toolCalls.treatmentLowerCount}/${bothPass.toolCalls.equalCount}/${bothPass.toolCalls.treatmentHigherCount}`);
+    console.log(`   • Both-PASS wall time: ${formatMetric(bothPass.wallTimeMs, 1000)}s`);
   }
 
   // Print Group D Learning Funnel & Amortization
@@ -366,8 +521,8 @@ export function printFormattedReportTable(summary: BenchmarkReportSummary): void
     console.log("\n🧬 [Group D: Autonomous Learning Funnel & Coverage]");
     console.log(`   • Step 1 Train Solved:         ${cov.trainPassRatePct.toFixed(1)}% (${cov.trainPassCount}/${cov.trainTotal})`);
     console.log(`   • Step 2 Skill Crystallized:   ${cov.crystallizeRatePct.toFixed(1)}% (${cov.crystallizeCount}/${cov.trainTotal})`);
-    console.log(`   • Step 3 Held-out Recalled:    ${cov.heldoutRecallRatePct.toFixed(1)}% (${cov.heldoutRecallCount}/${cov.trainTotal})`);
-    console.log(`   • Step 4 Useful Recall (Pass): ${cov.usefulRecallRatePct.toFixed(1)}% (${cov.usefulRecallCount}/${cov.trainTotal})`);
+    console.log(`   • Step 3 Held-out Recalled:    ${cov.heldoutRecallRatePct.toFixed(1)}% (${cov.heldoutRecallCount}/${cov.heldoutTotal})`);
+    console.log(`   • Step 4 Useful Recall (Pass): ${cov.usefulRecallRatePct.toFixed(1)}% (${cov.usefulRecallCount}/${cov.heldoutTotal})`);
     console.log(`   • Train Total Tokens (median): ${Math.round(cov.medianTrainTotalTokens).toLocaleString()}`);
     console.log(`   • Train Tool Calls (median):   ${cov.medianTrainToolCalls.toFixed(1)}`);
     console.log(`   • Train Wall Time (median):    ${(cov.medianTrainWallTimeMs / 1000).toFixed(1)}s`);

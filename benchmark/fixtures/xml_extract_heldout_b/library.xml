@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<library>
+  <book isbn="978-1" available="true"><title>Patterns</title><author>Gamma</author></book>
+  <book isbn="978-2" available="false"><title>Compilers</title><author>Aho</author></book>
+  <book isbn="978-3" available="true"><title>Networks</title><author>Tanenbaum</author></book>
+</library>

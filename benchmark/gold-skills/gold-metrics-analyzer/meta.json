@@ -1,0 +1,12 @@
+{
+  "slug": "gold-metrics-analyzer",
+  "title": "CSV Metrics Anomaly Scanner",
+  "tags": [
+    "metrics",
+    "csv",
+    "anomaly",
+    "diagnosis"
+  ],
+  "version": 1,
+  "verified": true
+}

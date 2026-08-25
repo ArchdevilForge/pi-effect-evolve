@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<inventory>
+  <item id="I-10" status="in_stock"><label>Dock</label><warehouse>east</warehouse></item>
+  <item id="I-11" status="backorder"><label>Stand</label><warehouse>west</warehouse></item>
+  <item id="I-12" status="in_stock"><label>Hub</label><warehouse>east</warehouse></item>
+</inventory>

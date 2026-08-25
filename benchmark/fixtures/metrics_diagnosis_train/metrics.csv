@@ -1,0 +1,4 @@
+service,error_rate,latency_ms
+api,1.2,120
+worker,8.5,210
+search,2.0,750

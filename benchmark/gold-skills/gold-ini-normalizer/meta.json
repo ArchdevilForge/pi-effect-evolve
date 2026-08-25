@@ -1,0 +1,12 @@
+{
+  "slug": "gold-ini-normalizer",
+  "title": "INI Section Normalizer",
+  "tags": [
+    "ini",
+    "config",
+    "normalize",
+    "sections"
+  ],
+  "version": 1,
+  "verified": true
+}

@@ -1,0 +1,4 @@
+service,error_rate,latency_ms
+billing,7.0,700
+profile,1.0,300
+queue,4.5,100

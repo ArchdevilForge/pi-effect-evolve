@@ -1,0 +1,12 @@
+{
+  "slug": "gold-config-auditor",
+  "title": "JSON Configuration Risk Auditor",
+  "tags": [
+    "config",
+    "audit",
+    "security",
+    "diagnosis"
+  ],
+  "version": 1,
+  "verified": true
+}

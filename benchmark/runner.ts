@@ -247,6 +247,7 @@ export async function executeAgentTask(
   return {
     taskId: task.id,
     family: task.family,
+    taskClass: task.taskClass,
     group,
     repeatIndex,
     passed: verifier.passed && !timedOut,
@@ -303,37 +304,37 @@ export async function main(): Promise<void> {
 
     console.log(`\n📂 [Family: ${family}] (${familyTasks.length} tasks)`);
 
-    for (const heldout of heldoutTasks) {
-      console.log(`  🎯 Held-out Task: ${heldout.id}`);
+    for (let r = 0; r < repeats; r++) {
+      let learnedMemoryDir: string | undefined = undefined;
+      let trainMeta: { passed: boolean; cost: number; inputTokens: number; totalTokens: number; toolCalls: number; crystallizedCount: number; wallTimeMs: number; learnedSlugs: string[] } | undefined = undefined;
 
-      for (let r = 0; r < repeats; r++) {
-        let learnedMemoryDir: string | undefined = undefined;
-        let trainMeta: { passed: boolean; cost: number; inputTokens: number; totalTokens: number; toolCalls: number; crystallizedCount: number; wallTimeMs: number; learnedSlugs: string[] } | undefined = undefined;
+      // Train once per family/repeat, then reuse the learned memory for both held-out tasks.
+      if (trainTask) {
+        process.stdout.write(`     ↳ [D_learned: Step 1 Train (#${r + 1})]... `);
+        const trainRes = await executeAgentTask(trainTask, "D_learned", r, extPath, {
+          modelName: modelArg,
+          thinkingLevel: thinkingArg,
+          mode: "auto",
+          keepFailures,
+        });
+        learnedMemoryDir = trainRes.learnedMemoryDir;
+        trainMeta = {
+          passed: trainRes.passed,
+          cost: trainRes.usage.cost,
+          inputTokens: trainRes.usage.inputTokens,
+          totalTokens: trainRes.usage.totalTokens,
+          toolCalls: trainRes.toolCalls,
+          crystallizedCount: trainRes.crystallizedSkills.length,
+          wallTimeMs: trainRes.wallTimeMs,
+          learnedSlugs: trainRes.crystallizedSkills,
+        };
+        console.log(trainRes.passed ? `✅ Train Ok (${(trainRes.wallTimeMs / 1000).toFixed(1)}s, ${trainRes.crystallizedSkills.length} skills crystallized)` : `⚠️ Train Failed`);
+      }
 
-        // --- Step 1: Group D Train Stage (if trainTask exists) ---
-        if (trainTask) {
-          process.stdout.write(`     ↳ [D_learned: Step 1 Train (#${r + 1})]... `);
-          const trainRes = await executeAgentTask(trainTask, "D_learned", r, extPath, {
-            modelName: modelArg,
-            thinkingLevel: thinkingArg,
-            mode: "auto", // Allow crystallization
-            keepFailures,
-          });
-          learnedMemoryDir = trainRes.learnedMemoryDir;
-          trainMeta = {
-            passed: trainRes.passed,
-            cost: trainRes.usage.cost,
-            inputTokens: trainRes.usage.inputTokens,
-            totalTokens: trainRes.usage.totalTokens,
-            toolCalls: trainRes.toolCalls,
-            crystallizedCount: trainRes.crystallizedSkills.length,
-            wallTimeMs: trainRes.wallTimeMs,
-            learnedSlugs: trainRes.crystallizedSkills,
-          };
-          console.log(trainRes.passed ? `✅ Train Ok (${(trainRes.wallTimeMs / 1000).toFixed(1)}s, ${trainRes.crystallizedSkills.length} skills crystallized)` : `⚠️ Train Failed`);
-        }
+      for (const heldout of heldoutTasks) {
+        console.log(`  🎯 Held-out Task: ${heldout.id}`);
 
-        // --- Step 2: Randomized A/B/C/D Execution on Held-out ---
+        // --- Randomized A/B/C/D Execution on Held-out ---
         const groupsToTest: AgentRunResult["group"][] = ["A_bare", "B_empty", "C_warm", "D_learned"];
         const randomizedGroups = shuffleArray(groupsToTest, rand);
 
@@ -342,12 +343,11 @@ export async function main(): Promise<void> {
           const res = await executeAgentTask(heldout, grp, r, extPath, {
             modelName: modelArg,
             thinkingLevel: thinkingArg,
-            mode: "conservative", // Frozen memory during test
+            mode: "conservative",
             learnedMemoryDir: grp === "D_learned" ? learnedMemoryDir : undefined,
             keepFailures,
           });
 
-          // Link training metadata for Group D
           if (grp === "D_learned" && trainMeta) {
             res.trainPassed = trainMeta.passed;
             res.trainCost = trainMeta.cost;
@@ -356,17 +356,18 @@ export async function main(): Promise<void> {
             res.trainToolCalls = trainMeta.toolCalls;
             res.trainCrystallizedCount = trainMeta.crystallizedCount;
             res.trainWallTimeMs = trainMeta.wallTimeMs;
+            res.trainTaskId = trainTask?.id;
+            res.trainRunKey = `${family}|${r}`;
             res.heldoutRecalledLearnedSkill = res.recalledSkills.some((s) => trainMeta?.learnedSlugs.includes(s));
           }
 
           allResults.push(res);
           console.log(res.passed ? `✅ PASS (${(res.wallTimeMs / 1000).toFixed(1)}s, ${res.toolCalls} tools)` : `❌ FAIL (${res.error?.slice(0, 30)})`);
         }
+      }
 
-        // Clean up temporary learned buffer
-        if (learnedMemoryDir) {
-          try { Fs.rmSync(learnedMemoryDir, { recursive: true, force: true }); } catch {}
-        }
+      if (learnedMemoryDir) {
+        try { Fs.rmSync(learnedMemoryDir, { recursive: true, force: true }); } catch {}
       }
     }
   }

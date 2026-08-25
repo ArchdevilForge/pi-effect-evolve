@@ -1,0 +1,8 @@
+{
+  "environment": "production",
+  "debug": true,
+  "database": {
+    "ssl": false,
+    "password": "plaintext"
+  }
+}

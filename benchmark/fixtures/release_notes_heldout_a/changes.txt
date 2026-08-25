@@ -1,0 +1,2 @@
+Added dark mode to the dashboard
+Fixed duplicate email notifications

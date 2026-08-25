@@ -5,6 +5,7 @@
 export interface BenchmarkTask {
   id: string;
   family: string;
+  taskClass: BenchmarkTaskClass;
   type: "train" | "held_out_a" | "held_out_b";
   prompt: string;
   fixtureDir: string;
@@ -12,6 +13,12 @@ export interface BenchmarkTask {
   verifierScript: string;
   goldSkillSlug?: string | undefined;
 }
+
+export type BenchmarkTaskClass =
+  | "transformation"
+  | "diagnostic"
+  | "repository_modification"
+  | "one_off_reasoning";
 
 export interface PiExecutionUsage {
   inputTokens: number;
@@ -25,6 +32,7 @@ export interface PiExecutionUsage {
 export interface AgentRunResult {
   taskId: string;
   family: string;
+  taskClass?: BenchmarkTaskClass | string | undefined;
   group: "A_bare" | "B_empty" | "C_warm" | "D_learned" | "E_poison";
   repeatIndex: number;
   passed: boolean;
@@ -46,6 +54,8 @@ export interface AgentRunResult {
   trainToolCalls?: number | undefined;
   trainCrystallizedCount?: number | undefined;
   trainWallTimeMs?: number | undefined;
+  trainTaskId?: string | undefined;
+  trainRunKey?: string | undefined;
   heldoutRecalledLearnedSkill?: boolean | undefined;
 }
 
@@ -76,6 +86,7 @@ export interface LearningCoverageReport {
   trainPassRatePct: number;
   crystallizeCount: number;
   crystallizeRatePct: number;
+  heldoutTotal: number;
   heldoutRecallCount: number;
   heldoutRecallRatePct: number;
   usefulRecallCount: number;
@@ -91,6 +102,7 @@ export interface LearningCoverageReport {
 
 export interface FamilyBreakdownRow {
   family: string;
+  taskClass: string;
   barePassRatePct: number;
   learnedPassRatePct: number;
   bareMedianTools: number;
@@ -104,6 +116,47 @@ export interface FamilyBreakdownRow {
   timeDeltaPct: number;
   learnedRecallRatePct: number;
   usefulRecallRatePct: number;
+  pairedSuccessCount: number;
+  pairedMedianToolDelta: number | null;
+  pairedMedianTokenDelta: number | null;
+}
+
+export interface TaskClassBreakdownRow {
+  taskClass: string;
+  familyCount: number;
+  barePassRatePct: number;
+  learnedPassRatePct: number;
+  bareMedianTools: number;
+  learnedMedianTools: number;
+  bareMedianTotalTokens: number;
+  learnedMedianTotalTokens: number;
+  pairedSuccessCount: number;
+  pairedMedianToolDelta: number | null;
+  pairedMedianTokenDelta: number | null;
+}
+
+export interface PairedMetricSummary {
+  baselineMedian: number | null;
+  treatmentMedian: number | null;
+  medianDelta: number | null;
+  medianDeltaPct: number | null;
+  treatmentLowerCount: number;
+  equalCount: number;
+  treatmentHigherCount: number;
+}
+
+export interface PairedOutcomeReport {
+  totalPairs: number;
+  bothPassPairs: number;
+  baselineOnlyPassPairs: number;
+  treatmentOnlyPassPairs: number;
+  bothFailPairs: number;
+  mcnemarExactPValue: number;
+  bothPass: {
+    totalTokens: PairedMetricSummary;
+    toolCalls: PairedMetricSummary;
+    wallTimeMs: PairedMetricSummary;
+  };
 }
 
 export interface BenchmarkReportSummary {
@@ -114,6 +167,8 @@ export interface BenchmarkReportSummary {
   groups: Record<string, GroupStats>;
   learningCoverage?: LearningCoverageReport | undefined;
   familyBreakdown?: FamilyBreakdownRow[] | undefined;
+  taskClassBreakdown?: TaskClassBreakdownRow[] | undefined;
+  pairedOutcome?: PairedOutcomeReport | undefined;
   bootstrapConfidenceIntervals?: Record<string, {
     metric: string;
     low95: number;

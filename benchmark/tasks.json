@@ -2,6 +2,7 @@
   {
     "id": "json-extract-train",
     "family": "json-extract",
+    "taskClass": "transformation",
     "type": "train",
     "prompt": "Read input_nested.json and extract all active user IDs, usernames, and their primary email into flat_users.json as a clean list of objects",
     "fixtureDir": "benchmark/fixtures/json_extract_train",
@@ -11,6 +12,7 @@
   {
     "id": "json-extract-heldout-a",
     "family": "json-extract",
+    "taskClass": "transformation",
     "type": "held_out_a",
     "prompt": "Parse sensor_hierarchy.json and extract all devices with status 'online' into flat_devices.json with deviceId, model, and ipAddress",
     "fixtureDir": "benchmark/fixtures/json_extract_heldout_a",
@@ -18,8 +20,19 @@
     "goldSkillSlug": "gold-json-flatten"
   },
   {
+    "id": "json-extract-heldout-b",
+    "family": "json-extract",
+    "taskClass": "transformation",
+    "type": "held_out_b",
+    "prompt": "Read service_tree.json and write healthy_services.json containing every healthy instance as service, instanceId, and url",
+    "fixtureDir": "benchmark/fixtures/json_extract_heldout_b",
+    "verifierScript": "benchmark/verifiers/verify_json_extract_c.py",
+    "goldSkillSlug": "gold-json-flatten"
+  },
+  {
     "id": "csv-cleanup-train",
     "family": "csv-cleanup",
+    "taskClass": "transformation",
     "type": "train",
     "prompt": "Clean up raw_messy.csv (which has mixed delimiters, unescaped quotes, and blank lines) and output clean standard RFC-4180 clean.csv",
     "fixtureDir": "benchmark/fixtures/csv_cleanup_train",
@@ -29,6 +42,7 @@
   {
     "id": "csv-cleanup-heldout-a",
     "family": "csv-cleanup",
+    "taskClass": "transformation",
     "type": "held_out_a",
     "prompt": "Fix corrupted_transactions.csv by standardizing separators to comma, trimming whitespace, and saving to valid_transactions.csv",
     "fixtureDir": "benchmark/fixtures/csv_cleanup_heldout_a",
@@ -36,26 +50,79 @@
     "goldSkillSlug": "gold-csv-sanitizer"
   },
   {
-    "id": "test-repair-train",
-    "family": "test-repair",
-    "type": "train",
-    "prompt": "Run the failing unit test test_calculator.py, fix the bug in calculator.py so that python3 -m unittest test_calculator.py passes with 0 failures",
-    "fixtureDir": "benchmark/fixtures/test_repair_train",
-    "verifierScript": "benchmark/verifiers/verify_test_repair.py",
-    "goldSkillSlug": "gold-unittest-debugger"
+    "id": "csv-cleanup-heldout-b",
+    "family": "csv-cleanup",
+    "taskClass": "transformation",
+    "type": "held_out_b",
+    "prompt": "Normalize user_events.csv into clean_events.csv using comma separators, preserving all rows and removing blank lines",
+    "fixtureDir": "benchmark/fixtures/csv_cleanup_heldout_b",
+    "verifierScript": "benchmark/verifiers/verify_csv_cleanup_c.py",
+    "goldSkillSlug": "gold-csv-sanitizer"
   },
   {
-    "id": "test-repair-heldout-a",
-    "family": "test-repair",
+    "id": "xml-extract-train",
+    "family": "xml-extract",
+    "taskClass": "transformation",
+    "type": "train",
+    "prompt": "Parse catalog.xml and write products.json containing active products with sku, name, and numeric price",
+    "fixtureDir": "benchmark/fixtures/xml_extract_train",
+    "verifierScript": "benchmark/verifiers/verify_xml_extract.py",
+    "goldSkillSlug": "gold-xml-extractor"
+  },
+  {
+    "id": "xml-extract-heldout-a",
+    "family": "xml-extract",
+    "taskClass": "transformation",
     "type": "held_out_a",
-    "prompt": "Fix the sorting algorithm bug in data_sorter.py so that all test assertions in test_sorter.py pass cleanly",
-    "fixtureDir": "benchmark/fixtures/test_repair_heldout_a",
-    "verifierScript": "benchmark/verifiers/verify_test_repair_b.py",
-    "goldSkillSlug": "gold-unittest-debugger"
+    "prompt": "Parse inventory.xml and write available_inventory.json containing in_stock items with id, label, and warehouse",
+    "fixtureDir": "benchmark/fixtures/xml_extract_heldout_a",
+    "verifierScript": "benchmark/verifiers/verify_xml_extract_b.py",
+    "goldSkillSlug": "gold-xml-extractor"
+  },
+  {
+    "id": "xml-extract-heldout-b",
+    "family": "xml-extract",
+    "taskClass": "transformation",
+    "type": "held_out_b",
+    "prompt": "Parse library.xml and write available_books.json containing available books with isbn, title, and author",
+    "fixtureDir": "benchmark/fixtures/xml_extract_heldout_b",
+    "verifierScript": "benchmark/verifiers/verify_xml_extract_c.py",
+    "goldSkillSlug": "gold-xml-extractor"
+  },
+  {
+    "id": "ini-normalize-train",
+    "family": "ini-normalize",
+    "taskClass": "transformation",
+    "type": "train",
+    "prompt": "Read raw.ini and convert every INI section and key into normalized.json as a nested JSON object, preserving values as strings",
+    "fixtureDir": "benchmark/fixtures/ini_normalize_train",
+    "verifierScript": "benchmark/verifiers/verify_ini_normalize.py",
+    "goldSkillSlug": "gold-ini-normalizer"
+  },
+  {
+    "id": "ini-normalize-heldout-a",
+    "family": "ini-normalize",
+    "taskClass": "transformation",
+    "type": "held_out_a",
+    "prompt": "Convert staging.ini into staging_config.json as a nested object keyed by INI section, preserving all values",
+    "fixtureDir": "benchmark/fixtures/ini_normalize_heldout_a",
+    "verifierScript": "benchmark/verifiers/verify_ini_normalize_b.py",
+    "goldSkillSlug": "gold-ini-normalizer"
+  },
+  {
+    "id": "ini-normalize-heldout-b",
+    "family": "ini-normalize",
+    "taskClass": "transformation",
+    "type": "held_out_b",
+    "prompt": "Convert client.ini into client_config.json as a nested object keyed by INI section, preserving all values",
+    "fixtureDir": "benchmark/fixtures/ini_normalize_heldout_b",
+    "verifierScript": "benchmark/verifiers/verify_ini_normalize_c.py",
+    "goldSkillSlug": "gold-ini-normalizer"
   },
   {
     "id": "log-diagnosis-train",
     "family": "log-diagnosis",
+    "taskClass": "diagnostic",
     "type": "train",
     "prompt": "Analyze server.log, identify all unique exception types and their occurrence counts, and save the summary to error_summary.json",
     "fixtureDir": "benchmark/fixtures/log_diagnosis_train",
@@ -65,10 +132,231 @@
   {
     "id": "log-diagnosis-heldout-a",
     "family": "log-diagnosis",
+    "taskClass": "diagnostic",
     "type": "held_out_a",
     "prompt": "Scan application_trace.log, extract the root cause stack trace for the FATAL crash and write { 'error': ..., 'line': ..., 'file': ... } to fatal_cause.json",
     "fixtureDir": "benchmark/fixtures/log_diagnosis_heldout_a",
     "verifierScript": "benchmark/verifiers/verify_log_diagnosis_b.py",
     "goldSkillSlug": "gold-log-parser"
+  },
+  {
+    "id": "log-diagnosis-heldout-b",
+    "family": "log-diagnosis",
+    "taskClass": "diagnostic",
+    "type": "held_out_b",
+    "prompt": "Count each exception type in worker.log and save the counts as a JSON object to worker_errors.json",
+    "fixtureDir": "benchmark/fixtures/log_diagnosis_heldout_b",
+    "verifierScript": "benchmark/verifiers/verify_log_diagnosis_c.py",
+    "goldSkillSlug": "gold-log-parser"
+  },
+  {
+    "id": "config-diagnosis-train",
+    "family": "config-diagnosis",
+    "taskClass": "diagnostic",
+    "type": "train",
+    "prompt": "Audit app_config.json for the three unsafe production settings and save their issue codes in config_issues.json",
+    "fixtureDir": "benchmark/fixtures/config_diagnosis_train",
+    "verifierScript": "benchmark/verifiers/verify_config_diagnosis.py",
+    "goldSkillSlug": "gold-config-auditor"
+  },
+  {
+    "id": "config-diagnosis-heldout-a",
+    "family": "config-diagnosis",
+    "taskClass": "diagnostic",
+    "type": "held_out_a",
+    "prompt": "Audit service_config.json and save the issue codes for anonymous access, disabled TLS, and disabled retries in service_issues.json",
+    "fixtureDir": "benchmark/fixtures/config_diagnosis_heldout_a",
+    "verifierScript": "benchmark/verifiers/verify_config_diagnosis_b.py",
+    "goldSkillSlug": "gold-config-auditor"
+  },
+  {
+    "id": "config-diagnosis-heldout-b",
+    "family": "config-diagnosis",
+    "taskClass": "diagnostic",
+    "type": "held_out_b",
+    "prompt": "Audit deployment.json and save the issue codes for zero replicas, a floating image tag, and a privileged container in deployment_issues.json",
+    "fixtureDir": "benchmark/fixtures/config_diagnosis_heldout_b",
+    "verifierScript": "benchmark/verifiers/verify_config_diagnosis_c.py",
+    "goldSkillSlug": "gold-config-auditor"
+  },
+  {
+    "id": "traceback-diagnosis-train",
+    "family": "traceback-diagnosis",
+    "taskClass": "diagnostic",
+    "type": "train",
+    "prompt": "Read traceback.txt and write root_cause.json with the final exception type, source file, and source line",
+    "fixtureDir": "benchmark/fixtures/traceback_diagnosis_train",
+    "verifierScript": "benchmark/verifiers/verify_traceback_diagnosis.py",
+    "goldSkillSlug": "gold-traceback-diagnoser"
+  },
+  {
+    "id": "traceback-diagnosis-heldout-a",
+    "family": "traceback-diagnosis",
+    "taskClass": "diagnostic",
+    "type": "held_out_a",
+    "prompt": "Read job_trace.txt and write job_root_cause.json with the final exception type, source file, and source line",
+    "fixtureDir": "benchmark/fixtures/traceback_diagnosis_heldout_a",
+    "verifierScript": "benchmark/verifiers/verify_traceback_diagnosis_b.py",
+    "goldSkillSlug": "gold-traceback-diagnoser"
+  },
+  {
+    "id": "traceback-diagnosis-heldout-b",
+    "family": "traceback-diagnosis",
+    "taskClass": "diagnostic",
+    "type": "held_out_b",
+    "prompt": "Read api_trace.txt and write api_root_cause.json with the final exception type, source file, and source line",
+    "fixtureDir": "benchmark/fixtures/traceback_diagnosis_heldout_b",
+    "verifierScript": "benchmark/verifiers/verify_traceback_diagnosis_c.py",
+    "goldSkillSlug": "gold-traceback-diagnoser"
+  },
+  {
+    "id": "metrics-diagnosis-train",
+    "family": "metrics-diagnosis",
+    "taskClass": "diagnostic",
+    "type": "train",
+    "prompt": "Analyze metrics.csv and write anomalies.json listing services whose error_rate is above 5 or latency_ms is above 500",
+    "fixtureDir": "benchmark/fixtures/metrics_diagnosis_train",
+    "verifierScript": "benchmark/verifiers/verify_metrics_diagnosis.py",
+    "goldSkillSlug": "gold-metrics-analyzer"
+  },
+  {
+    "id": "metrics-diagnosis-heldout-a",
+    "family": "metrics-diagnosis",
+    "taskClass": "diagnostic",
+    "type": "held_out_a",
+    "prompt": "Analyze metrics_a.csv and write metric_anomalies.json listing services whose error_rate is above 5 or latency_ms is above 500",
+    "fixtureDir": "benchmark/fixtures/metrics_diagnosis_heldout_a",
+    "verifierScript": "benchmark/verifiers/verify_metrics_diagnosis_b.py",
+    "goldSkillSlug": "gold-metrics-analyzer"
+  },
+  {
+    "id": "metrics-diagnosis-heldout-b",
+    "family": "metrics-diagnosis",
+    "taskClass": "diagnostic",
+    "type": "held_out_b",
+    "prompt": "Analyze metrics_b.csv and write metric_anomalies.json listing services whose error_rate is above 5 or latency_ms is above 500",
+    "fixtureDir": "benchmark/fixtures/metrics_diagnosis_heldout_b",
+    "verifierScript": "benchmark/verifiers/verify_metrics_diagnosis_c.py",
+    "goldSkillSlug": "gold-metrics-analyzer"
+  },
+  {
+    "id": "test-repair-train",
+    "family": "test-repair",
+    "taskClass": "repository_modification",
+    "type": "train",
+    "prompt": "Run the failing unit test test_calculator.py, fix the bug in calculator.py so that python3 -m unittest test_calculator.py passes with 0 failures",
+    "fixtureDir": "benchmark/fixtures/test_repair_train",
+    "verifierScript": "benchmark/verifiers/verify_test_repair.py",
+    "goldSkillSlug": "gold-unittest-debugger"
+  },
+  {
+    "id": "test-repair-heldout-a",
+    "family": "test-repair",
+    "taskClass": "repository_modification",
+    "type": "held_out_a",
+    "prompt": "Fix the sorting algorithm bug in data_sorter.py so that all test assertions in test_sorter.py pass cleanly",
+    "fixtureDir": "benchmark/fixtures/test_repair_heldout_a",
+    "verifierScript": "benchmark/verifiers/verify_test_repair_b.py",
+    "goldSkillSlug": "gold-unittest-debugger"
+  },
+  {
+    "id": "test-repair-heldout-b",
+    "family": "test-repair",
+    "taskClass": "repository_modification",
+    "type": "held_out_b",
+    "prompt": "Fix normalize_name in string_tools.py so that test_string_tools.py passes with trimmed title-case names",
+    "fixtureDir": "benchmark/fixtures/test_repair_heldout_b",
+    "verifierScript": "benchmark/verifiers/verify_test_repair_c.py",
+    "goldSkillSlug": "gold-unittest-debugger"
+  },
+  {
+    "id": "api-migration-train",
+    "family": "api-migration",
+    "taskClass": "repository_modification",
+    "type": "train",
+    "prompt": "Migrate legacy_client.py from the removed api.get_user method to the new api.fetch_user method while preserving get_user's public interface, then pass its unit test",
+    "fixtureDir": "benchmark/fixtures/api_migration_train",
+    "verifierScript": "benchmark/verifiers/verify_api_migration.py",
+    "goldSkillSlug": "gold-api-migrator"
+  },
+  {
+    "id": "api-migration-heldout-a",
+    "family": "api-migration",
+    "taskClass": "repository_modification",
+    "type": "held_out_a",
+    "prompt": "Migrate billing_client.py from the removed api.get_invoice method to api.fetch_invoice while preserving get_invoice's public interface, then pass its unit test",
+    "fixtureDir": "benchmark/fixtures/api_migration_heldout_a",
+    "verifierScript": "benchmark/verifiers/verify_api_migration_b.py",
+    "goldSkillSlug": "gold-api-migrator"
+  },
+  {
+    "id": "api-migration-heldout-b",
+    "family": "api-migration",
+    "taskClass": "repository_modification",
+    "type": "held_out_b",
+    "prompt": "Migrate profile_client.py from the removed api.get_profile method to api.fetch_profile while preserving get_profile's public interface, then pass its unit test",
+    "fixtureDir": "benchmark/fixtures/api_migration_heldout_b",
+    "verifierScript": "benchmark/verifiers/verify_api_migration_c.py",
+    "goldSkillSlug": "gold-api-migrator"
+  },
+  {
+    "id": "refactor-rename-train",
+    "family": "refactor-rename",
+    "taskClass": "repository_modification",
+    "type": "train",
+    "prompt": "Rename build_report to make_report throughout reporter.py, update its caller, and make test_reporter.py pass",
+    "fixtureDir": "benchmark/fixtures/refactor_rename_train",
+    "verifierScript": "benchmark/verifiers/verify_refactor_rename.py",
+    "goldSkillSlug": "gold-symbol-renamer"
+  },
+  {
+    "id": "refactor-rename-heldout-a",
+    "family": "refactor-rename",
+    "taskClass": "repository_modification",
+    "type": "held_out_a",
+    "prompt": "Rename format_user to render_user throughout formatter.py, update its caller, and make test_formatter.py pass",
+    "fixtureDir": "benchmark/fixtures/refactor_rename_heldout_a",
+    "verifierScript": "benchmark/verifiers/verify_refactor_rename_b.py",
+    "goldSkillSlug": "gold-symbol-renamer"
+  },
+  {
+    "id": "refactor-rename-heldout-b",
+    "family": "refactor-rename",
+    "taskClass": "repository_modification",
+    "type": "held_out_b",
+    "prompt": "Rename calc_total to sum_total throughout stats.py, update its caller, and make test_stats.py pass",
+    "fixtureDir": "benchmark/fixtures/refactor_rename_heldout_b",
+    "verifierScript": "benchmark/verifiers/verify_refactor_rename_c.py",
+    "goldSkillSlug": "gold-symbol-renamer"
+  },
+  {
+    "id": "release-notes-train",
+    "family": "release-notes",
+    "taskClass": "one_off_reasoning",
+    "type": "train",
+    "prompt": "Turn the two lines in changes.txt into release_notes.md with a ## Highlights heading and one Markdown bullet per change",
+    "fixtureDir": "benchmark/fixtures/release_notes_train",
+    "verifierScript": "benchmark/verifiers/verify_release_notes.py",
+    "goldSkillSlug": "gold-release-notes"
+  },
+  {
+    "id": "release-notes-heldout-a",
+    "family": "release-notes",
+    "taskClass": "one_off_reasoning",
+    "type": "held_out_a",
+    "prompt": "Turn the two lines in changes.txt into release_notes.md with a ## Highlights heading and one Markdown bullet per change",
+    "fixtureDir": "benchmark/fixtures/release_notes_heldout_a",
+    "verifierScript": "benchmark/verifiers/verify_release_notes_b.py",
+    "goldSkillSlug": "gold-release-notes"
+  },
+  {
+    "id": "release-notes-heldout-b",
+    "family": "release-notes",
+    "taskClass": "one_off_reasoning",
+    "type": "held_out_b",
+    "prompt": "Turn the two lines in changes.txt into release_notes.md with a ## Highlights heading and one Markdown bullet per change",
+    "fixtureDir": "benchmark/fixtures/release_notes_heldout_b",
+    "verifierScript": "benchmark/verifiers/verify_release_notes_c.py",
+    "goldSkillSlug": "gold-release-notes"
   }
 ]

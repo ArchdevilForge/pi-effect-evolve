@@ -1,0 +1,10 @@
+{
+  "environment": "prod",
+  "auth": {
+    "allow_anonymous": true
+  },
+  "tls": {
+    "enabled": false
+  },
+  "retries": 0
+}

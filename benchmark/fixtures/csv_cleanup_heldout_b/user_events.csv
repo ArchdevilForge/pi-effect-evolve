@@ -1,0 +1,5 @@
+event_id|user|kind
+E1|alice|login
+
+E2|bob|logout
+E3|cora|login

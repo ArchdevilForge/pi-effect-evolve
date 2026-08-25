@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "client.py", line 73, in fetch
+    return payload['token']
+KeyError: 'token'

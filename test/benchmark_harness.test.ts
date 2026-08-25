@@ -113,6 +113,45 @@ describe("🧪 Benchmark Harness Component Tests", () => {
     assert.ok(ci.median < 0, "Median change should be negative (reduction)");
   });
 
+  it("reports paired outcomes instead of inferring them from separate medians", () => {
+    const makeRun = (group: "A_bare" | "D_learned", taskId: string, passed: boolean, tokens: number, tools: number): AgentRunResult => ({
+      taskId,
+      family: "paired-family",
+      taskClass: "transformation",
+      group,
+      repeatIndex: 0,
+      passed,
+      verifierOutput: passed ? "VERIFIER_PASS" : "VERIFIER_FAIL",
+      wallTimeMs: 1000,
+      turns: 1,
+      toolCalls: tools,
+      toolErrors: 0,
+      usage: { inputTokens: tokens, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalTokens: tokens, cost: 0 },
+      recalledSkills: [],
+      crystallizedSkills: [],
+      exitCode: passed ? 0 : 1,
+    });
+
+    const report = generateBenchmarkReport([
+      makeRun("A_bare", "t1", true, 10, 2),
+      makeRun("A_bare", "t2", false, 20, 3),
+      makeRun("A_bare", "t3", true, 30, 4),
+      makeRun("A_bare", "t4", false, 40, 5),
+      makeRun("D_learned", "t1", true, 12, 2),
+      makeRun("D_learned", "t2", true, 22, 4),
+      makeRun("D_learned", "t3", false, 32, 5),
+      makeRun("D_learned", "t4", false, 42, 5),
+    ], "mock-gpt");
+
+    assert.equal(report.pairedOutcome?.totalPairs, 4);
+    assert.equal(report.pairedOutcome?.bothPassPairs, 1);
+    assert.equal(report.pairedOutcome?.baselineOnlyPassPairs, 1);
+    assert.equal(report.pairedOutcome?.treatmentOnlyPassPairs, 1);
+    assert.equal(report.pairedOutcome?.bothPass.toolCalls.medianDelta, 0);
+    assert.equal(report.pairedOutcome?.mcnemarExactPValue, 1);
+    assert.equal(report.taskClassBreakdown?.[0]?.familyCount, 1);
+  });
+
   it("sets up deterministic local fixtures and verifiers without network dependency", () => {
     setupBenchmarkFixtures();
     // Fixtures are written deterministically

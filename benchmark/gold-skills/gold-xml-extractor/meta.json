@@ -1,0 +1,12 @@
+{
+  "slug": "gold-xml-extractor",
+  "title": "XML Inventory Extractor",
+  "tags": [
+    "xml",
+    "extract",
+    "inventory",
+    "catalog"
+  ],
+  "version": 1,
+  "verified": true
+}

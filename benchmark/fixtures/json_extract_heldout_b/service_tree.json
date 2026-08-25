@@ -1,0 +1,35 @@
+{
+  "services": [
+    {
+      "name": "payments",
+      "instances": [
+        {
+          "id": "p-1",
+          "healthy": true,
+          "endpoint": {
+            "url": "https://payments-1"
+          }
+        },
+        {
+          "id": "p-2",
+          "healthy": false,
+          "endpoint": {
+            "url": "https://payments-2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "search",
+      "instances": [
+        {
+          "id": "s-1",
+          "healthy": true,
+          "endpoint": {
+            "url": "https://search-1"
+          }
+        }
+      ]
+    }
+  ]
+}

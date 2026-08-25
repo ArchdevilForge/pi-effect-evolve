@@ -1,0 +1,12 @@
+{
+  "slug": "gold-traceback-diagnoser",
+  "title": "Python Traceback Root-Cause Extractor",
+  "tags": [
+    "traceback",
+    "diagnosis",
+    "error",
+    "line"
+  ],
+  "version": 1,
+  "verified": true
+}

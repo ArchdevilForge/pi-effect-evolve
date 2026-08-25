@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<catalog>
+  <product sku="A-1" active="true"><name>Keyboard</name><price>49.50</price></product>
+  <product sku="A-2" active="false"><name>Mouse</name><price>19.00</price></product>
+  <product sku="A-3" active="true"><name>Monitor</name><price>199.00</price></product>
+</catalog>

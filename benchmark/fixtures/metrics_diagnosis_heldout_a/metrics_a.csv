@@ -1,0 +1,4 @@
+service,error_rate,latency_ms
+checkout,0.4,610
+catalog,6.1,180
+login,1.0,90
