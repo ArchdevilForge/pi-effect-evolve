@@ -1,7 +1,7 @@
 {
   "name": "@archdevil/pi-effect-evolve",
-  "version": "0.2.0",
-  "description": "A lightweight Procedural Memory & Skill Cache layer for pi coding agent with semantic recall, conservative auto-crystallization, and syntax-verified repair.",
+  "version": "0.1.0",
+  "description": "Procedural memory and experience crystallization for Pi coding agents.",
   "type": "module",
   "license": "MIT",
   "author": "ArchdevilForge",
@@ -10,7 +10,7 @@
     "effect",
     "genericagent",
     "hermes",
-    "self-evolving",
+    "procedural-memory",
     "memory"
   ],
   "files": [

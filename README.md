@@ -1,16 +1,16 @@
 # pi-effect-evolve
 
-> **A lightweight Procedural Memory & Experience Crystallization layer for `pi` — caching verified scripts, indexing reusable workflows, and transferring learned execution patterns across tasks in an Effect-managed harness.**
+> **Procedural memory and experience crystallization for `pi` coding agents.**
 
 ---
 
 ## ⚡ What It Actually Does
 
-* 🧠 **Skill Cache & Auto-Recall**: On prompt submission, uses a sub-millisecond in-memory BM25/IDF inverted index to find previously verified scripts and injects Top-2 snippets into the system prompt.
-* 💎 **Candidate Crystallization**: When a multi-step task succeeds, extracts candidate executable scripts from tool traces and persists them to `skills/evolve/<slug>/` with metadata.
-* 🛡️ **Syntax-Verified Mutation**: When a skill encounters runtime/timeout failures, diagnoses the error category and generates defensive wrapper variants (retries/assertions/exceptions) that must pass AST syntax verification before application.
-* 🧹 **Two-Stage Adaptive Pruning**: Automatically soft-deprecates inactive (>60d) or low-success (<30%) skills on session startup and archives them after 90 days.
-* ⚡ **Effect IO Kernel**: Typed error channels, schedule-based backoff, atomic file replacement, and signal-aware aborts.
+* 🧠 **Learn from successful workflows**: Captures useful execution traces after verified task completion.
+* 💎 **Crystallize reusable skills**: Stores both executable code skills and multi-step procedure recipes.
+* 🔎 **Recall on related tasks**: Retrieves relevant memory for future prompts and supports exact skill expansion when needed.
+* ⚡ **Defer memory tooling**: Keeps evolve tool schemas out of unrelated provider requests to reduce context overhead.
+* 🛡️ **Keep writes guarded**: Uses syntax verification, credential scrubbing, atomic replacement, and an audit trail.
 
 ---
 
@@ -108,6 +108,14 @@ npm run benchmark:ab
 ```
 
 The expansion benchmark keeps the task catalog fixed during a run. Primary evaluation is paired verifier outcome (`D Learned >= A Bare`) with an exact McNemar diagnostic. Efficiency is reported on the same-task/repeat pairs where both agents pass; results are also split by family and task class. Learning coverage uses unique `family × repeat` train stages, while recall and useful recall use held-out runs.
+
+## 📊 Results
+
+The frozen 12-family expansion run contains 72 paired held-out tasks. Learned mode passed 62/72 (86.1%) versus 56/72 (77.8%) for Bare Pi. The direction is positive, but the paired difference is not statistically significant at this sample size (exact McNemar `p = 0.180`).
+
+Among the 52 pairs where both agents passed, Learned mode had slightly lower median total tokens (`-559`, `-3.4%`) and tool calls (`-1`, `-16.7%`). Efficiency remains task-dependent; this is not a claim of universal token savings.
+
+See the full design, task-class breakdown, learning funnel, and limitations in [BENCHMARK.md](BENCHMARK.md).
 
 ---
 
